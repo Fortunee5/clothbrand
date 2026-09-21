@@ -1,56 +1,39 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { SlidersHorizontal, X } from 'lucide-react'
+import LazyImage from '../components/LazyImage'
+import useGsapContext from '../hooks/useGsapContext'
+import { gsap, EASE } from '../lib/gsap'
+import { fetchProducts, getCachedProducts } from '../lib/productsApi'
 
-const initialProducts = [
-  {
-    id: 1,
-    name: "Elegant Summer Dress",
-    description: "A beautiful floral print dress perfect for summer outings.",
-    price: "15500.00",
-    images: ["https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?auto=format&fit=crop&q=80&w=800"],
-    category: "Dresses",
-  },
-  {
-    id: 2,
-    name: "Classic White Blouse",
-    description: "Versatile white blouse for professional or casual wear.",
-    price: "8500.00",
-    images: ["https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=800"],
-    category: "Tops",
-  },
-  {
-    id: 3,
-    name: "Tailored Blazer - Navy",
-    description: "Sharp navy blazer with excellent fit.",
-    price: "22000.00",
-    images: ["https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80&w=800"],
-    category: "Outerwear",
-  },
-  {
-    id: 4,
-    name: "High-Waist Wide Leg Trousers",
-    description: "Comfortable and stylish wide-leg trousers.",
-    price: "12500.00",
-    images: ["https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&q=80&w=800"],
-    category: "Pants",
-  },
-]
 
 export default function Shop() {
-  const [products, setProducts] = useState(initialProducts)
+  const [products, setProducts] = useState(getCachedProducts())
   const [activeCategory, setActiveCategory] = useState('All')
+  const gridRef = useRef(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem('products')
-    if (saved) setProducts(JSON.parse(saved))
+    fetchProducts().then(({ products: fetched }) => {
+      setProducts(fetched)
+    })
   }, [])
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))]
   const filtered = activeCategory === 'All' ? products : products.filter((p) => p.category === activeCategory)
 
+  // Re-run a light stagger reveal whenever the visible set changes (filter
+  // switch or initial load) so the grid never just "pops" into place.
+  useGsapContext(() => {
+    if (!gridRef.current) return
+    gsap.fromTo(
+      gridRef.current.children,
+      { opacity: 0, y: 20 },
+      { opacity: 1, y: 0, duration: 0.45, stagger: 0.04, ease: EASE }
+    )
+  }, [activeCategory, filtered.length], gridRef)
+
   return (
-    <div className="min-h-screen">
+    <div>
       {/* Page header */}
       <div className="bg-[#F7F5F0] pt-10 sm:pt-14 pb-8 sm:pb-12">
         <div className="container mx-auto px-4 sm:px-6">
@@ -97,16 +80,17 @@ export default function Shop() {
             <p className="text-gray-400 text-sm uppercase tracking-widest">No products found</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-8">
+          <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-5 lg:gap-8">
             {filtered.map((product) => (
               <Link key={product.id} to={`/product/${product.id}`} className="group">
-                <div className="relative aspect-[3/4] mb-3 bg-gray-50 overflow-hidden">
-                  <img
+                <div className="relative aspect-[3/4] mb-3 overflow-hidden">
+                  <LazyImage
                     src={product.images[0]}
                     alt={product.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
+                    className="h-full w-full"
+                    imgClassName="transition-transform duration-700 group-hover:scale-[1.05]"
                   />
-                  <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2.5">
+                  <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2.5 z-10">
                     <span className="text-white text-[9px] font-bold uppercase tracking-[0.15em]">Quick View</span>
                   </div>
                 </div>

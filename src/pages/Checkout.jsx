@@ -1,18 +1,26 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useCart } from '../context/CartContext'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Copy, CheckCircle2, AlertCircle, CreditCard, Banknote, Truck } from 'lucide-react'
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyNdI5AalFbG_2_CAWq2Jr_xGTpI2j8W5-hnMyg98aaF_88AKxYdzX6SoP3zET63X_HUw/exec'
+import { ChevronRight, Copy, CheckCircle2, AlertCircle, CreditCard, Banknote, Upload, X } from 'lucide-react'
+import { saveOrder } from '../lib/ordersApi'
+import { useToast } from '../context/ToastContext'
+import Spinner from '../components/Spinner'
+import LazyImage from '../components/LazyImage'
+import { compressImageFile } from '../lib/imageUtils'
+import { gsap, prefersReducedMotion } from '../lib/gsap'
 
 // ── Replace with your Paystack PUBLIC key from dashboard.paystack.com ──
-const PAYSTACK_PUBLIC_KEY = 'pk_live_XXXXXXXvUreW3ZjMcDuMTowd1BZsK9CYJdk7eKJw'
+const PAYSTACK_PUBLIC_KEY = 'pk_live_ffedac69295791001805bbe82c00257a2cbe2a90'
 
 const BANK_DETAILS = {
   bank: 'OPay',
-  accountNumber: '8144311841',
-  accountName: 'Amos Chegwe',
+  accountNumber: '7075896812',
+  accountName: 'ADEOLA LAWAL',
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Accepts Nigerian numbers in local (0803...) or international (+234803...) form
+const PHONE_RE = /^(\+?234|0)[789][01]\d{8}$/
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false)
@@ -32,17 +40,27 @@ function CopyButton({ text }) {
   )
 }
 
+function FieldError({ children }) {
+  if (!children) return null
+  return <p className="mt-1 text-xs font-medium text-red-500">{children}</p>
+}
+
 export default function Checkout() {
   const { cart, total, clearCart } = useCart()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     email: '', firstName: '', lastName: '',
     address: '', city: '', phone: '',
     paymentMethod: 'card',
   })
+  const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [transferConfirmed, setTransferConfirmed] = useState(false)
+  const [paymentProof, setPaymentProof] = useState(null)
+  const [proofUploading, setProofUploading] = useState(false)
+  const formSectionRef = useRef(null)
 
   // Load Paystack inline script once
   useEffect(() => {
@@ -54,6 +72,17 @@ export default function Checkout() {
     document.body.appendChild(script)
   }, [])
 
+  // Animate the form section whenever the step changes, so moving between
+  // "Information" and "Payment" feels intentional rather than an abrupt swap.
+  useEffect(() => {
+    if (prefersReducedMotion || !formSectionRef.current) return
+    gsap.fromTo(
+      formSectionRef.current,
+      { opacity: 0, x: 12 },
+      { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' }
+    )
+  }, [step])
+
   if (cart.length === 0) {
     return (
       <div className="container mx-auto px-4 py-32 text-center">
@@ -64,39 +93,54 @@ export default function Checkout() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-    if (name === 'paymentMethod') setTransferConfirmed(false)
-  }
-
-  const saveOrderLocally = (extraFields = {}) => {
-    const order = {
-      id: Date.now(),
-      ...formData,
-      items: cart,
-      total,
-      createdAt: new Date().toLocaleString(),
-      status: 'Pending',
-      ...extraFields,
+    setFormData((prev) => ({ ...prev, [name]: value }))
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: null }))
+    if (name === 'paymentMethod') {
+      setTransferConfirmed(false)
+      setPaymentProof(null)
     }
-    const existing = JSON.parse(localStorage.getItem('orders') || '[]')
-    localStorage.setItem('orders', JSON.stringify([...existing, order]))
-    return order
   }
 
-  const notifyAdmin = async (order) => {
-    try {
-      await fetch(GAS_URL, {
-        method: 'POST', mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'order', order, adminEmail: 'thestyleyouhub@gmail.com' }),
-      })
-    } catch (_) {}
+  const validateStep1 = () => {
+    const next = {}
+    if (!EMAIL_RE.test(formData.email.trim())) next.email = 'Enter a valid email address'
+    if (!formData.firstName.trim()) next.firstName = 'Required'
+    if (!formData.lastName.trim()) next.lastName = 'Required'
+    if (!formData.address.trim()) next.address = 'Required'
+    if (!formData.city.trim()) next.city = 'Required'
+    if (!PHONE_RE.test(formData.phone.replace(/\s/g, ''))) next.phone = 'Enter a valid Nigerian phone number'
+    setErrors(next)
+    if (Object.keys(next).length > 0) {
+      toast('Please fix the highlighted fields', { type: 'error' })
+      return false
+    }
+    return true
+  }
+
+  const buildOrder = (extraFields = {}) => ({
+    id: Date.now(),
+    ...formData,
+    items: cart,
+    total,
+    createdAt: new Date().toLocaleString(),
+    status: 'Pending',
+    ...(paymentProof ? { paymentProof } : {}),
+    ...extraFields,
+  })
+
+  const finalizeOrder = async (order) => {
+    const { synced } = await saveOrder(order)
+    clearCart()
+    navigate(`/checkout/success?id=${order.id}`)
+    if (!synced) {
+      toast('Order saved on this device. It will sync to the admin dashboard once you\'re back online.', { type: 'info', duration: 6000 })
+    }
   }
 
   // Paystack popup handler
   const initiateCardPayment = () => {
     if (!window.PaystackPop) {
-      alert('Payment system is loading, please try again in a moment.')
+      toast('Payment system is still loading — please try again in a moment.', { type: 'error' })
       return
     }
     setLoading(true)
@@ -114,36 +158,49 @@ export default function Checkout() {
         ]
       },
       callback: async (response) => {
-        // Payment successful — reference: response.reference
-        const order = saveOrderLocally({ status: 'Paid', paystackRef: response.reference })
-        await notifyAdmin(order)
-        clearCart()
-        navigate(`/checkout/success?id=${order.id}`)
+        const order = buildOrder({ status: 'Paid', paystackRef: response.reference })
+        await finalizeOrder(order)
         setLoading(false)
       },
       onClose: () => {
         setLoading(false)
+        toast('Payment cancelled.', { type: 'info' })
       },
     })
     handler.openIframe()
   }
 
+  const handleProofUpload = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setProofUploading(true)
+    try {
+      const compressed = await compressImageFile(file)
+      setPaymentProof(compressed)
+    } catch (err) {
+      toast(err.message || 'Couldn\'t process that image — try a different screenshot.', { type: 'error' })
+    }
+    setProofUploading(false)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (step === 1) { setStep(2); return }
+    if (step === 1) {
+      if (validateStep1()) setStep(2)
+      return
+    }
 
     if (formData.paymentMethod === 'card') {
       initiateCardPayment()
       return
     }
 
-    if (formData.paymentMethod === 'online' && !transferConfirmed) return
+    if (formData.paymentMethod === 'online' && (!transferConfirmed || !paymentProof)) return
 
     setLoading(true)
-    const order = saveOrderLocally()
-    await notifyAdmin(order)
-    clearCart()
-    navigate(`/checkout/success?id=${order.id}`)
+    const order = buildOrder()
+    await finalizeOrder(order)
     setLoading(false)
   }
 
@@ -160,72 +217,98 @@ export default function Checkout() {
       label: 'Bank Transfer (OPay)',
       desc: 'Transfer the exact amount to our OPay account before placing your order',
     },
-    {
-      value: 'pay_on_delivery',
-      icon: <Truck size={18} />,
-      label: 'Pay on Delivery',
-      desc: 'Pay with cash or card when your order arrives',
-    },
   ]
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="bg-white">
       <div className="container mx-auto px-4 lg:px-20 py-8 lg:py-16">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
 
           {/* ── Left: Form ── */}
           <div className="order-2 lg:order-1">
-            <nav className="flex items-center space-x-2 text-xs mb-8 text-gray-400 uppercase tracking-widest">
+            <nav className="flex items-center space-x-2 text-xs mb-4 text-gray-400 uppercase tracking-widest">
               <span className={step >= 1 ? 'text-black font-bold' : ''}>Information</span>
               <ChevronRight size={12} />
               <span className={step >= 2 ? 'text-black font-bold' : ''}>Payment</span>
             </nav>
+            {/* Progress bar */}
+            <div className="h-1 w-full bg-gray-100 rounded-full mb-8 overflow-hidden">
+              <div
+                className="h-full bg-[#C9A24B] rounded-full transition-all duration-500 ease-out"
+                style={{ width: step === 1 ? '50%' : '100%' }}
+              />
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8">
+            <form onSubmit={handleSubmit} className="space-y-8" noValidate>
+              <div ref={formSectionRef}>
 
               {/* ── Step 1 ── */}
               {step === 1 && (
-                <>
+                <div className="space-y-8">
                   <div className="space-y-3">
                     <h2 className="text-base font-bold uppercase tracking-widest">Contact</h2>
-                    <input required type="email" name="email" placeholder="Email address"
-                      value={formData.email} onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded p-3 text-sm focus:ring-1 focus:ring-black outline-none" />
+                    <div>
+                      <input type="email" name="email" placeholder="Email address"
+                        value={formData.email} onChange={handleInputChange}
+                        aria-invalid={!!errors.email}
+                        className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.email ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
+                      <FieldError>{errors.email}</FieldError>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
                     <h2 className="text-base font-bold uppercase tracking-widest">Shipping Address</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <input required type="text" name="firstName" placeholder="First name"
-                        value={formData.firstName} onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded p-3 text-sm focus:ring-1 focus:ring-black outline-none" />
-                      <input required type="text" name="lastName" placeholder="Last name"
-                        value={formData.lastName} onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded p-3 text-sm focus:ring-1 focus:ring-black outline-none" />
+                      <div>
+                        <input type="text" name="firstName" placeholder="First name"
+                          value={formData.firstName} onChange={handleInputChange}
+                          aria-invalid={!!errors.firstName}
+                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.firstName ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
+                        <FieldError>{errors.firstName}</FieldError>
+                      </div>
+                      <div>
+                        <input type="text" name="lastName" placeholder="Last name"
+                          value={formData.lastName} onChange={handleInputChange}
+                          aria-invalid={!!errors.lastName}
+                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.lastName ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
+                        <FieldError>{errors.lastName}</FieldError>
+                      </div>
                     </div>
-                    <input required type="text" name="address" placeholder="Street address"
-                      value={formData.address} onChange={handleInputChange}
-                      className="w-full border border-gray-300 rounded p-3 text-sm focus:ring-1 focus:ring-black outline-none" />
+                    <div>
+                      <input type="text" name="address" placeholder="Street address"
+                        value={formData.address} onChange={handleInputChange}
+                        aria-invalid={!!errors.address}
+                        className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.address ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
+                      <FieldError>{errors.address}</FieldError>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <input required type="text" name="city" placeholder="City"
-                        value={formData.city} onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded p-3 text-sm focus:ring-1 focus:ring-black outline-none" />
-                      <input required type="tel" name="phone" placeholder="Phone number"
-                        value={formData.phone} onChange={handleInputChange}
-                        className="w-full border border-gray-300 rounded p-3 text-sm focus:ring-1 focus:ring-black outline-none" />
+                      <div>
+                        <input type="text" name="city" placeholder="City"
+                          value={formData.city} onChange={handleInputChange}
+                          aria-invalid={!!errors.city}
+                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.city ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
+                        <FieldError>{errors.city}</FieldError>
+                      </div>
+                      <div>
+                        <input type="tel" name="phone" placeholder="e.g. 0803 123 4567"
+                          value={formData.phone} onChange={handleInputChange}
+                          aria-invalid={!!errors.phone}
+                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.phone ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
+                        <FieldError>{errors.phone}</FieldError>
+                      </div>
                     </div>
                   </div>
 
                   <button type="submit"
-                    className="w-full sm:w-auto bg-black text-white px-8 py-4 rounded font-bold uppercase tracking-widest hover:bg-gray-900 transition-colors text-sm">
+                    className="w-full sm:w-auto bg-black text-white px-8 py-4 rounded font-bold uppercase tracking-widest hover:bg-gray-900 active:scale-[0.98] transition-all text-sm">
                     Continue to Payment
                   </button>
-                </>
+                </div>
               )}
 
               {/* ── Step 2 ── */}
               {step === 2 && (
-                <>
+                <div className="space-y-8">
                   <div className="space-y-3">
                     <h2 className="text-base font-bold uppercase tracking-widest">Payment Method</h2>
 
@@ -290,14 +373,46 @@ export default function Checkout() {
                             I have transferred <strong>₦{total.toLocaleString()}</strong> to the account above and understand my order will be processed once payment is confirmed.
                           </span>
                         </label>
+
+                        {/* Proof of payment — required before an order can
+                            be placed by transfer, so the admin has
+                            something to verify against instead of taking
+                            "I paid" on trust. */}
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">
+                            Upload proof of payment *
+                          </p>
+                          {paymentProof ? (
+                            <div className="relative inline-block">
+                              <img src={paymentProof} alt="Payment proof" className="h-28 w-28 object-cover rounded-lg border border-green-200" />
+                              <button type="button" onClick={() => setPaymentProof(null)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                                aria-label="Remove screenshot">
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <label className="flex items-center justify-center gap-2 border-2 border-dashed border-green-300 rounded-lg py-5 cursor-pointer hover:border-green-500 hover:bg-green-100/40 transition-colors">
+                              {proofUploading
+                                ? <Spinner size={16} className="text-green-700" />
+                                : <Upload size={16} className="text-green-700" />}
+                              <span className="text-xs font-semibold text-green-800">
+                                {proofUploading ? 'Processing…' : 'Tap to upload a screenshot'}
+                              </span>
+                              <input type="file" accept="image/*" onChange={handleProofUpload}
+                                disabled={proofUploading} className="hidden" />
+                            </label>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <button type="submit"
-                      disabled={loading || (formData.paymentMethod === 'online' && !transferConfirmed)}
-                      className="flex-grow bg-black text-white px-8 py-4 rounded font-bold uppercase tracking-widest hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed text-sm">
+                      disabled={loading || (formData.paymentMethod === 'online' && (!transferConfirmed || !paymentProof))}
+                      className="flex-grow bg-black text-white px-8 py-4 rounded font-bold uppercase tracking-widest hover:bg-gray-900 active:scale-[0.98] transition-all disabled:bg-gray-300 disabled:cursor-not-allowed disabled:active:scale-100 text-sm flex items-center justify-center gap-2">
+                      {loading && <Spinner size={15} />}
                       {loading
                         ? 'Processing…'
                         : formData.paymentMethod === 'card'
@@ -309,21 +424,22 @@ export default function Checkout() {
                       ← Back
                     </button>
                   </div>
-                </>
+                </div>
               )}
+              </div>
             </form>
           </div>
 
           {/* ── Right: Order summary ── */}
           <div className="order-1 lg:order-2">
-            <div className="bg-gray-50 rounded-lg p-6 lg:p-8 sticky top-8">
+            <div className="bg-gray-50 rounded-lg p-6 lg:p-8 lg:sticky lg:top-8">
               <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-5">Order Summary</h2>
-              <div className="space-y-4 mb-6">
+              <div className="space-y-4 mb-6 max-h-[40vh] lg:max-h-none overflow-y-auto pr-1">
                 {cart.map(item => (
                   <div key={item.id} className="flex items-center gap-4">
-                    <div className="relative w-14 flex-shrink-0 bg-white border border-gray-200 rounded overflow-hidden" style={{ height: '4.5rem' }}>
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                      <span className="absolute -top-1.5 -right-1.5 bg-gray-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                    <div className="relative w-14 flex-shrink-0 rounded overflow-hidden" style={{ height: '4.5rem' }}>
+                      <LazyImage src={item.image} alt={item.name} className="h-full w-full" />
+                      <span className="absolute -top-1.5 -right-1.5 bg-gray-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold z-10">
                         {item.quantity}
                       </span>
                     </div>

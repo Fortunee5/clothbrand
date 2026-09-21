@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom'
 import { ShoppingBag, Search, User, Menu, X } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useCart } from '../context/CartContext'
+import { gsap, prefersReducedMotion } from '../lib/gsap'
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -9,6 +10,8 @@ export default function Header() {
   const { cart } = useCart()
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const location = useLocation()
+  const cartBadgeRef = useRef(null)
+  const prevCount = useRef(cartCount)
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 8)
@@ -24,6 +27,19 @@ export default function Header() {
     document.body.style.overflow = isMenuOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [isMenuOpen])
+
+  // Small "pop" on the cart badge whenever an item is added — a tiny bit of
+  // feedback that the click actually registered, without being distracting.
+  useEffect(() => {
+    if (cartCount > prevCount.current && cartBadgeRef.current && !prefersReducedMotion) {
+      gsap.fromTo(
+        cartBadgeRef.current,
+        { scale: 1.6 },
+        { scale: 1, duration: 0.4, ease: 'back.out(3)' }
+      )
+    }
+    prevCount.current = cartCount
+  }, [cartCount])
 
   const navLinks = [
     { to: '/', label: 'Home' },
@@ -43,7 +59,7 @@ export default function Header() {
       >
         {/* Announcement bar */}
         <div className="bg-[#0D0F1C] text-[#C9A24B] text-[10px] tracking-[0.2em] uppercase font-medium py-2 text-center hidden sm:block">
-          Free shipping on orders over ₦30,000 · Lagos & nationwide delivery
+          Free shipping on orders over ₦100,000 · Lagos & nationwide delivery
         </div>
 
         <div className="container mx-auto px-4 sm:px-6">
@@ -51,7 +67,7 @@ export default function Header() {
             {/* Mobile menu trigger */}
             <button
               aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
-              className="lg:hidden p-2 -ml-2 rounded-md hover:bg-gray-50 transition-colors"
+              className="lg:hidden p-2 -ml-2 rounded-md hover:bg-gray-50 active:scale-90 transition-all"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -82,19 +98,7 @@ export default function Header() {
 
             {/* Actions */}
             <div className="flex items-center gap-1 sm:gap-2">
-              <button
-                aria-label="Search"
-                className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-600 hover:text-black"
-              >
-                <Search size={18} />
-              </button>
-              <Link
-                to="/admin/login"
-                aria-label="Account"
-                className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-600 hover:text-black"
-              >
-                <User size={18} />
-              </Link>
+
               <Link
                 to="/cart"
                 aria-label={`Cart (${cartCount} items)`}
@@ -102,7 +106,10 @@ export default function Header() {
               >
                 <ShoppingBag size={18} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-[#C9A24B] text-white text-[9px] min-w-[16px] h-[16px] px-0.5 rounded-full flex items-center justify-center font-bold leading-none">
+                  <span
+                    ref={cartBadgeRef}
+                    className="absolute -top-0.5 -right-0.5 bg-[#C9A24B] text-white text-[9px] min-w-[16px] h-[16px] px-0.5 rounded-full flex items-center justify-center font-bold leading-none"
+                  >
                     {cartCount}
                   </span>
                 )}
@@ -122,7 +129,7 @@ export default function Header() {
 
       {/* Mobile drawer */}
       <div
-        className={`fixed top-0 left-0 z-50 h-full w-[280px] bg-white shadow-2xl transition-transform duration-300 ease-out lg:hidden flex flex-col ${
+        className={`fixed top-0 left-0 z-50 h-full w-[280px] max-w-[85vw] bg-white shadow-2xl transition-transform duration-300 ease-out lg:hidden flex flex-col ${
           isMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -152,13 +159,6 @@ export default function Header() {
 
           <div className="pt-6 border-t border-gray-100 mt-6 space-y-1">
             <Link
-              to="/admin/login"
-              className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
-            >
-              <User size={16} />
-              <span>Account</span>
-            </Link>
-            <Link
               to="/cart"
               className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-black transition-colors"
             >
@@ -168,9 +168,9 @@ export default function Header() {
           </div>
         </nav>
 
-        <div className="px-5 py-4 border-t border-gray-100 bg-[#0D0F1C]">
+        <div className="px-5 py-4 border-t border-gray-100 bg-[#0D0F1C]" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <p className="text-[#C9A24B] text-[10px] tracking-[0.2em] uppercase font-medium text-center">
-            Free shipping over ₦30,000
+            Free shipping over ₦100,000
           </p>
         </div>
       </div>

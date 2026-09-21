@@ -13,6 +13,19 @@
   html {
     scroll-behavior: smooth;
   }
+
+  /* Exactly one scroll container for the whole app (the browser
+     viewport). The mobile nav drawer sits off-canvas via a horizontal
+     transform on a `position: fixed` element — some browsers count that
+     off-screen space in the page's scrollable area even though it's
+     invisible, which is what was producing an extra horizontal
+     scrollbar (on top of the normal vertical one) on every page. This
+     clips it at the root so nothing can ever introduce a second
+     scrollbar again. */
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
 }
 
 /* Selection */

@@ -1,57 +1,42 @@
 import { useParams, Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useCart } from '../context/CartContext'
-import { Minus, Plus, ShoppingBag, ChevronLeft, Truck, RefreshCw, Shield } from 'lucide-react'
+import { Minus, Plus, ShoppingBag, Truck, RefreshCw, Shield } from 'lucide-react'
+import LazyImage from '../components/LazyImage'
+import { useToast } from '../context/ToastContext'
+import useGsapContext from '../hooks/useGsapContext'
+import { gsap, EASE } from '../lib/gsap'
+import { fetchProducts, getCachedProducts } from '../lib/productsApi'
 
-const initialProducts = [
-  {
-    id: 1,
-    name: "Elegant Summer Dress",
-    description: "A beautiful floral print dress perfect for summer outings.",
-    price: "15500.00",
-    images: ["https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?auto=format&fit=crop&q=80&w=800"],
-    category: "Dresses",
-  },
-  {
-    id: 2,
-    name: "Classic White Blouse",
-    description: "Versatile white blouse for professional or casual wear.",
-    price: "8500.00",
-    images: ["https://images.unsplash.com/photo-1551163943-3f6a855d1153?auto=format&fit=crop&q=80&w=800"],
-    category: "Tops",
-  },
-  {
-    id: 3,
-    name: "Tailored Blazer - Navy",
-    description: "Sharp navy blazer with excellent fit.",
-    price: "22000.00",
-    images: ["https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80&w=800"],
-    category: "Outerwear",
-  },
-  {
-    id: 4,
-    name: "High-Waist Wide Leg Trousers",
-    description: "Comfortable and stylish wide-leg trousers.",
-    price: "12500.00",
-    images: ["https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&q=80&w=800"],
-    category: "Pants",
-  },
-]
 
 export default function ProductDetail() {
   const { id } = useParams()
   const { addToCart } = useCart()
+  const { toast } = useToast()
   const [quantity, setQuantity] = useState(1)
   const [currentImage, setCurrentImage] = useState(0)
-  const [products, setProducts] = useState(initialProducts)
+  const [products, setProducts] = useState(getCachedProducts())
   const [added, setAdded] = useState(false)
+  const infoRef = useRef(null)
+  const ctaRef = useRef(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem('products')
-    if (saved) setProducts(JSON.parse(saved))
+    fetchProducts().then(({ products: fetched }) => {
+      setProducts(fetched)
+    })
   }, [])
 
   const product = products.find((p) => p.id === parseInt(id))
+
+  // Entrance animation for the info column once the product is known.
+  useGsapContext(() => {
+    if (!product || !infoRef.current) return
+    gsap.fromTo(
+      infoRef.current.children,
+      { opacity: 0, y: 18 },
+      { opacity: 1, y: 0, duration: 0.5, stagger: 0.06, ease: EASE }
+    )
+  }, [product?.id], infoRef)
 
   if (!product) {
     return (
@@ -67,11 +52,15 @@ export default function ProductDetail() {
   const handleAddToCart = () => {
     for (let i = 0; i < quantity; i++) addToCart(product)
     setAdded(true)
+    toast(`Added ${quantity} × ${product.name} to your bag.`, { type: 'success' })
+    if (ctaRef.current) {
+      gsap.fromTo(ctaRef.current, { scale: 0.96 }, { scale: 1, duration: 0.35, ease: 'back.out(2.5)' })
+    }
     setTimeout(() => setAdded(false), 2000)
   }
 
   return (
-    <div className="min-h-screen">
+    <div>
       {/* Breadcrumb */}
       <div className="border-b border-gray-100">
         <div className="container mx-auto px-4 sm:px-6 py-3">
@@ -90,13 +79,15 @@ export default function ProductDetail() {
 
           {/* Images */}
           <div className="space-y-3">
-            <div className="relative aspect-[4/5] bg-[#F7F5F0] overflow-hidden">
-              <img
+            <div className="relative aspect-[4/5] overflow-hidden">
+              <LazyImage
+                key={currentImage}
                 src={product.images[currentImage]}
                 alt={product.name}
-                className="w-full h-full object-cover"
+                className="h-full w-full"
+                eager
               />
-              <span className="absolute top-4 left-4 bg-[#0D0F1C] text-[#C9A24B] text-[9px] font-bold uppercase tracking-[0.2em] px-3 py-1.5">
+              <span className="absolute top-4 left-4 z-10 bg-[#0D0F1C] text-[#C9A24B] text-[9px] font-bold uppercase tracking-[0.2em] px-3 py-1.5">
                 {product.category}
               </span>
             </div>
@@ -110,7 +101,7 @@ export default function ProductDetail() {
                       currentImage === i ? 'border-[#C9A24B]' : 'border-transparent'
                     }`}
                   >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <LazyImage src={img} alt="" className="h-full w-full" eager />
                   </button>
                 ))}
               </div>
@@ -118,7 +109,7 @@ export default function ProductDetail() {
           </div>
 
           {/* Info — sticky on large screens */}
-          <div className="lg:sticky lg:top-24 lg:self-start space-y-6">
+          <div ref={infoRef} className="lg:sticky lg:top-24 lg:self-start space-y-6">
             <div>
               <p className="text-[10px] text-[#C9A24B] uppercase tracking-[0.2em] font-semibold mb-1.5">{product.category}</p>
               <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-[-0.01em] leading-tight mb-3">
@@ -138,7 +129,7 @@ export default function ProductDetail() {
                 <button
                   aria-label="Decrease quantity"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 active:scale-90 transition-all"
                 >
                   <Minus size={14} />
                 </button>
@@ -146,7 +137,7 @@ export default function ProductDetail() {
                 <button
                   aria-label="Increase quantity"
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 active:scale-90 transition-all"
                 >
                   <Plus size={14} />
                 </button>
@@ -155,8 +146,9 @@ export default function ProductDetail() {
 
             {/* CTA */}
             <button
+              ref={ctaRef}
               onClick={handleAddToCart}
-              className={`w-full py-4 sm:py-5 font-bold uppercase tracking-[0.14em] text-sm flex items-center justify-center gap-3 transition-all duration-300 ${
+              className={`w-full py-4 sm:py-5 font-bold uppercase tracking-[0.14em] text-sm flex items-center justify-center gap-3 transition-all duration-300 active:scale-[0.98] ${
                 added
                   ? 'bg-green-600 text-white'
                   : 'bg-[#0D0F1C] text-white hover:bg-[#C9A24B]'

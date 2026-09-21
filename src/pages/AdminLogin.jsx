@@ -1,6 +1,10 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock } from 'lucide-react'
+import Spinner from '../components/Spinner'
+import { useToast } from '../context/ToastContext'
+import useGsapContext from '../hooks/useGsapContext'
+import { gsap, EASE } from '../lib/gsap'
 
 export default function AdminLogin() {
   const [username, setUsername] = useState('')
@@ -9,6 +13,16 @@ export default function AdminLogin() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { toast } = useToast()
+  const cardRef = useRef(null)
+
+  useGsapContext(() => {
+    gsap.fromTo(
+      cardRef.current,
+      { opacity: 0, y: 24, scale: 0.98 },
+      { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: EASE }
+    )
+  }, [], cardRef)
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -17,16 +31,20 @@ export default function AdminLogin() {
     await new Promise((r) => setTimeout(r, 400))
     if (username === 'DsuperaDmin' && password === 'TheSuperAdminPass9090') {
       localStorage.setItem('admin_session', 'true')
+      toast('Welcome back.', { type: 'success' })
       navigate('/admin/dashboard')
     } else {
       setError('Invalid username or password')
+      if (cardRef.current) {
+        gsap.fromTo(cardRef.current, { x: -8 }, { x: 0, duration: 0.4, ease: 'elastic.out(1, 0.4)' })
+      }
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center bg-[#F7F5F0] px-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-[85vh] flex items-center justify-center bg-[#F7F5F0] px-4 py-12">
+      <div ref={cardRef} className="w-full max-w-sm">
 
         {/* Brand */}
         <div className="text-center mb-8">
@@ -92,8 +110,9 @@ export default function AdminLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#0D0F1C] text-white py-3.5 rounded-lg text-[11px] font-bold uppercase tracking-[0.18em] hover:bg-[#C9A24B] transition-colors disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+              className="w-full bg-[#0D0F1C] text-white py-3.5 rounded-lg text-[11px] font-bold uppercase tracking-[0.18em] hover:bg-[#C9A24B] active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2"
             >
+              {loading && <Spinner size={14} />}
               {loading ? 'Signing in…' : 'Sign In'}
             </button>
           </form>

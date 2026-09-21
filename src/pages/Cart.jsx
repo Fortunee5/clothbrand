@@ -1,10 +1,24 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useCart } from '../context/CartContext'
 import { Minus, Plus, Trash2, ArrowRight, ShoppingBag } from 'lucide-react'
+import LazyImage from '../components/LazyImage'
+import useGsapContext from '../hooks/useGsapContext'
+import { gsap, EASE } from '../lib/gsap'
+import { useRef } from 'react'
 
 export default function Cart() {
   const { cart, removeFromCart, updateQuantity, total } = useCart()
   const navigate = useNavigate()
+  const listRef = useRef(null)
+
+  useGsapContext(() => {
+    if (!listRef.current) return
+    gsap.fromTo(
+      listRef.current.children,
+      { opacity: 0, y: 16 },
+      { opacity: 1, y: 0, duration: 0.4, stagger: 0.06, ease: EASE }
+    )
+  }, [cart.length], listRef)
 
   if (cart.length === 0) {
     return (
@@ -16,7 +30,7 @@ export default function Cart() {
         <p className="text-gray-500 text-sm mb-8 max-w-xs">You haven't added anything yet. Discover pieces you'll love.</p>
         <Link
           to="/shop"
-          className="inline-flex items-center gap-2 bg-[#0D0F1C] text-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.18em] hover:bg-[#C9A24B] transition-colors"
+          className="inline-flex items-center gap-2 bg-[#0D0F1C] text-white px-8 py-4 text-[11px] font-bold uppercase tracking-[0.18em] hover:bg-[#C9A24B] active:scale-[0.97] transition-all"
         >
           Start Shopping <ArrowRight size={14} />
         </Link>
@@ -25,7 +39,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div>
       <div className="bg-[#F7F5F0] pt-8 sm:pt-12 pb-6 sm:pb-8">
         <div className="container mx-auto px-4 sm:px-6">
           <h1 className="text-2xl sm:text-4xl font-bold uppercase tracking-[-0.02em]">Your Bag</h1>
@@ -37,16 +51,12 @@ export default function Cart() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 lg:gap-14">
 
           {/* Items */}
-          <div className="lg:col-span-2 space-y-0 divide-y divide-gray-100">
+          <div ref={listRef} className="lg:col-span-2 space-y-0 divide-y divide-gray-100">
             {cart.map((item) => (
               <div key={item.id} className="flex gap-4 sm:gap-6 py-6 first:pt-0">
                 <Link to={`/product/${item.id}`} className="shrink-0 block">
-                  <div className="w-20 sm:w-24 aspect-[3/4] bg-gray-50 overflow-hidden">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                    />
+                  <div className="w-20 sm:w-24 aspect-[3/4] overflow-hidden">
+                    <LazyImage src={item.image} alt={item.name} className="h-full w-full" imgClassName="hover:scale-105 transition-transform duration-500" eager />
                   </div>
                 </Link>
 
@@ -70,7 +80,7 @@ export default function Cart() {
                       <button
                         aria-label="Decrease"
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:scale-90 transition-all"
                       >
                         <Minus size={12} />
                       </button>
@@ -78,7 +88,7 @@ export default function Cart() {
                       <button
                         aria-label="Increase"
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                        className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:scale-90 transition-all"
                       >
                         <Plus size={12} />
                       </button>
@@ -118,7 +128,7 @@ export default function Cart() {
 
               <button
                 onClick={() => navigate('/checkout')}
-                className="w-full bg-[#0D0F1C] text-white py-4 font-bold uppercase tracking-[0.14em] text-[11px] flex items-center justify-center gap-3 hover:bg-[#C9A24B] transition-colors duration-300"
+                className="w-full bg-[#0D0F1C] text-white py-4 font-bold uppercase tracking-[0.14em] text-[11px] flex items-center justify-center gap-3 hover:bg-[#C9A24B] active:scale-[0.98] transition-all duration-300"
               >
                 Checkout <ArrowRight size={15} />
               </button>

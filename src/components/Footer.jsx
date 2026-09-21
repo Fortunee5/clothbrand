@@ -1,40 +1,5 @@
 import { Link } from 'react-router-dom'
-
-function InstagramIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <rect x="3" y="3" width="18" height="18" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-function FacebookIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M16 3h-2.5A4.5 4.5 0 0 0 9 7.5V10H6.5v3.5H9V21h3.5v-7.5h3l.5-3.5h-3.5V7.5c0-.83.67-1.5 1.5-1.5H16V3Z" />
-    </svg>
-  )
-}
-
-function TikTokIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M16 4c.3 2.2 1.8 3.7 4 4" />
-      <path d="M16 4v12.2a4 4 0 1 1-3-3.9" />
-    </svg>
-  )
-}
-
-function WhatsAppIcon({ className }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M3 21l1.4-3.8A8.5 8.5 0 1 1 8 20.4Z" />
-      <path d="M8.7 9.8c.2 2.4 2.1 4.3 4.5 4.5" />
-    </svg>
-  )
-}
+import { FaInstagram, FaSnapchat, FaTiktok, FaWhatsapp } from 'react-icons/fa6'
 
 function PhoneIcon({ className }) {
   return (
@@ -64,12 +29,11 @@ function MapPinIcon({ className }) {
 
 function SocialLink({ href, label, children }) {
   return (
-    
      <a href={href}
       aria-label={label}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3A4066] text-[#A6AAC0] transition-colors hover:border-[#C9A24B] hover:bg-[#C9A24B]/10 hover:text-[#C9A24B]"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#3A4066] text-[#A6AAC0] transition-colors hover:border-[#C9A24B] hover:bg-[#C9A24B]/10 hover:text-[#C9A24B] active:scale-95"
     >
       {children}
     </a>
@@ -86,7 +50,11 @@ export default function Footer() {
 
       <div className="container mx-auto px-4">
         <div className="mb-12 text-center md:text-left">
-          <p className="font-serif text-3xl uppercase tracking-[0.25em] text-[#EDE8DD] md:text-4xl">
+          {/* Wide letter-spacing at a fixed large size was pushing this
+              past the edge of narrow phone screens — now it scales down
+              (both font size and tracking) below the sm breakpoint so the
+              whole word always fits on one line. */}
+          <p className="font-serif text-xl sm:text-3xl md:text-4xl uppercase tracking-[0.08em] sm:tracking-[0.16em] md:tracking-[0.25em] text-[#EDE8DD] whitespace-nowrap">
             TheStyleYouHub
           </p>
           <p className="mt-2 font-serif text-sm italic tracking-wide text-[#C9A24B]">
@@ -122,18 +90,21 @@ export default function Footer() {
             <h3 className="inline-block border-b-2 border-[#C9A24B]/70 pb-2 text-sm font-bold uppercase tracking-[0.2em] text-[#EDE8DD]">
               Connect
             </h3>
-            <div className="flex items-center gap-3 pt-1">
-              <SocialLink href="#" label="Instagram">
-                <InstagramIcon className="h-4 w-4" />
+            {/* flex-wrap is a safety net on very narrow screens; at 44px
+                touch targets, 4 icons still comfortably fit one row down
+                to ~320px wide, but this keeps things from ever overlapping. */}
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-1 md:justify-start">
+              <SocialLink href="https://www.instagram.com/Let__me_style_you" label="Instagram">
+                <FaInstagram size={18} />
               </SocialLink>
-              <SocialLink href="#" label="Facebook">
-                <FacebookIcon className="h-4 w-4" />
+              <SocialLink href="https://www.snapchat.com/@letmestyle_you?sender_web_id=005df30d-a63e-4cc7-ade3-6e1fe2170348&device_type=desktop&is_copy_url=true" label="Snapchat">
+                <FaSnapchat size={18} />
               </SocialLink>
-              <SocialLink href="#" label="TikTok">
-                <TikTokIcon className="h-4 w-4" />
+              <SocialLink href="https://www.tiktok.com/@lmsy_official?_r=1&_t=ZS-99jk9Zq8sYX" label="TikTok">
+                <FaTiktok size={18} />
               </SocialLink>
-              <SocialLink href="#" label="WhatsApp">
-                <WhatsAppIcon className="h-4 w-4" />
+              <SocialLink href="https://wa.link/ktmfld" label="WhatsApp">
+                <FaWhatsapp size={18} />
               </SocialLink>
             </div>
           </div>
@@ -145,19 +116,15 @@ export default function Footer() {
             <ul className="space-y-3 text-sm">
               <li className="flex items-start gap-2.5">
                 <MapPinIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-[#C9A24B]" />
-                <span>14 Adeola Odeku Street, Victoria Island, Lagos, Nigeria</span>
+                <span>161 Lagos road onipanu bustop, Lagos, Nigeria</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <PhoneIcon className="h-4 w-4 flex-shrink-0 text-[#C9A24B]" />
-                <a href="tel:+2348000000000" className="transition-colors hover:text-[#C9A24B]">+234 800 000 0000</a>
+                <a href="tel:+2348155905763" className="transition-colors hover:text-[#C9A24B]">+234 815 590 5763</a>
               </li>
               <li className="flex items-center gap-2.5">
                 <PhoneIcon className="h-4 w-4 flex-shrink-0 text-[#C9A24B]" />
-                <a href="tel:+233500000000" className="transition-colors hover:text-[#C9A24B]">+233 50 000 0000</a>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <MailIcon className="h-4 w-4 flex-shrink-0 text-[#C9A24B]" />
-                <a href="mailto:hello@thestyleyouhub.com" className="transition-colors hover:text-[#C9A24B]">hello@thestyleyouhub.com</a>
+                <a href="tel:+2348094152116" className="transition-colors hover:text-[#C9A24B]">+233 809 415 2116</a>
               </li>
             </ul>
           </div>
