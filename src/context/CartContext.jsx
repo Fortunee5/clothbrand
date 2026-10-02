@@ -12,26 +12,31 @@ export function CartProvider({ children }) {
     localStorage.setItem('cart', JSON.stringify(cart))
   }, [cart])
 
-  const addToCart = (product) => {
+  // A cart line is unique per product + size (same shirt in 12 and 16 = two lines).
+  const keyOf = (item) => item.key || `${item.id}__${item.size || ''}`
+
+  const addToCart = (product, size = '', qty = 1) => {
+    const key = `${product.id}__${size}`
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id)
+      const existing = prev.find((item) => keyOf(item) === key)
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          keyOf(item) === key ? { ...item, quantity: item.quantity + qty } : item
         )
       }
-      return [...prev, { ...product, quantity: 1, image: product.images[0] }]
+      const { images, ...rest } = product
+      return [...prev, { ...rest, key, size, quantity: qty, image: images?.[0] }]
     })
   }
 
-  const removeFromCart = (id) => {
-    setCart((prev) => prev.filter((item) => item.id !== id))
+  const removeFromCart = (key) => {
+    setCart((prev) => prev.filter((item) => keyOf(item) !== key))
   }
 
-  const updateQuantity = (id, quantity) => {
+  const updateQuantity = (key, quantity) => {
     if (quantity < 1) return
     setCart((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+      prev.map((item) => (keyOf(item) === key ? { ...item, quantity } : item))
     )
   }
 
@@ -40,7 +45,7 @@ export function CartProvider({ children }) {
   const total = cart.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, total }}>
+    <CartContext.Provider value={{ cart: cart.map((i) => ({ ...i, key: keyOf(i) })), addToCart, removeFromCart, updateQuantity, clearCart, total }}>
       {children}
     </CartContext.Provider>
   )

@@ -53,7 +53,7 @@ export default function Cart() {
           {/* Items */}
           <div ref={listRef} className="lg:col-span-2 space-y-0 divide-y divide-gray-100">
             {cart.map((item) => (
-              <div key={item.id} className="flex gap-4 sm:gap-6 py-6 first:pt-0">
+              <div key={item.key} className="flex gap-4 sm:gap-6 py-6 first:pt-0">
                 <Link to={`/product/${item.id}`} className="shrink-0 block">
                   <div className="w-20 sm:w-24 aspect-[3/4] overflow-hidden">
                     <LazyImage src={item.image} alt={item.name} className="h-full w-full" imgClassName="hover:scale-105 transition-transform duration-500" eager />
@@ -64,11 +64,11 @@ export default function Cart() {
                   <div className="flex justify-between gap-2">
                     <div className="min-w-0">
                       <h3 className="font-bold uppercase tracking-wide text-sm leading-tight line-clamp-2">{item.name}</h3>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-[0.12em] mt-1">{item.category}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-[0.12em] mt-1">{item.category}{item.size ? ` · Size ${item.size}` : ''}</p>
                     </div>
                     <button
                       aria-label="Remove item"
-                      onClick={() => removeFromCart(item.id)}
+                      onClick={() => removeFromCart(item.key)}
                       className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors -mt-1"
                     >
                       <Trash2 size={15} />
@@ -79,7 +79,7 @@ export default function Cart() {
                     <div className="flex items-center border border-gray-200 rounded">
                       <button
                         aria-label="Decrease"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        onClick={() => updateQuantity(item.key, item.quantity - 1)}
                         className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:scale-90 transition-all"
                       >
                         <Minus size={12} />
@@ -87,7 +87,7 @@ export default function Cart() {
                       <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
                       <button
                         aria-label="Increase"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        onClick={() => updateQuantity(item.key, item.quantity + 1)}
                         className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 active:scale-90 transition-all"
                       >
                         <Plus size={12} />
@@ -111,8 +111,8 @@ export default function Cart() {
                   <span className="font-semibold">₦{total.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Shipping</span>
-                  <span className="text-green-600 font-semibold">Free</span>
+                  <span className="text-gray-600">Delivery</span>
+                  <span className="text-gray-500 text-xs font-medium">Calculated at checkout</span>
                 </div>
               </div>
 

@@ -81,7 +81,7 @@ export default function Footer() {
                 <Link to="#" className="transition-colors hover:text-[#C9A24B]">Contact Us</Link>
               </li>
               <li>
-                <Link to="#" className="transition-colors hover:text-[#C9A24B]">Shipping & Returns</Link>
+                <Link to="#" className="transition-colors hover:text-[#C9A24B]">Delivery & Returns</Link>
               </li>
             </ul>
           </div>

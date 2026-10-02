@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import './lib/store' // starts loading products + delivery fees immediately
 import { CartProvider } from './context/CartContext'
 import { ToastProvider } from './context/ToastContext'
 import { ConfirmProvider } from './context/ConfirmContext'

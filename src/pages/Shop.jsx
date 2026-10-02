@@ -4,19 +4,13 @@ import { SlidersHorizontal, X } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, EASE } from '../lib/gsap'
-import { fetchProducts, getCachedProducts } from '../lib/productsApi'
+import { useStore } from '../lib/store'
 
 
 export default function Shop() {
-  const [products, setProducts] = useState(getCachedProducts())
+  const { products } = useStore()
   const [activeCategory, setActiveCategory] = useState('All')
   const gridRef = useRef(null)
-
-  useEffect(() => {
-    fetchProducts().then(({ products: fetched }) => {
-      setProducts(fetched)
-    })
-  }, [])
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))]
   const filtered = activeCategory === 'All' ? products : products.filter((p) => p.category === activeCategory)

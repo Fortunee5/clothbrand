@@ -8,6 +8,9 @@ import Spinner from '../components/Spinner'
 import LazyImage from '../components/LazyImage'
 import { compressImageFile } from '../lib/imageUtils'
 import { gsap, prefersReducedMotion } from '../lib/gsap'
+import { useStore } from '../lib/store'
+import { NIGERIA, STATES } from '../lib/nigeria'
+import { getDeliveryFee, DELIVERY_TBC_MESSAGE } from '../lib/deliveryApi'
 
 // ── Replace with your Paystack PUBLIC key from dashboard.paystack.com ──
 const PAYSTACK_PUBLIC_KEY = 'pk_live_ffedac69295791001805bbe82c00257a2cbe2a90'
@@ -46,13 +49,14 @@ function FieldError({ children }) {
 }
 
 export default function Checkout() {
-  const { cart, total, clearCart } = useCart()
+  const { cart, total: subtotal, clearCart } = useCart()
+  const { delivery } = useStore()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
     email: '', firstName: '', lastName: '',
-    address: '', city: '', phone: '',
+    address: '', state: '', lga: '', phone: '',
     paymentMethod: 'card',
   })
   const [errors, setErrors] = useState({})
@@ -61,6 +65,11 @@ export default function Checkout() {
   const [paymentProof, setPaymentProof] = useState(null)
   const [proofUploading, setProofUploading] = useState(false)
   const formSectionRef = useRef(null)
+
+  // Delivery fee comes live from the admin's price list (state → LGA).
+  const deliveryFee = getDeliveryFee(delivery, formData.state, formData.lga) // number | null
+  const feeUnknown = !!formData.lga && deliveryFee === null
+  const total = subtotal + (deliveryFee || 0)
 
   // Load Paystack inline script once
   useEffect(() => {
@@ -93,7 +102,7 @@ export default function Checkout() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    setFormData((prev) => ({ ...prev, [name]: value, ...(name === 'state' ? { lga: '' } : {}) }))
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: null }))
     if (name === 'paymentMethod') {
       setTransferConfirmed(false)
@@ -107,7 +116,8 @@ export default function Checkout() {
     if (!formData.firstName.trim()) next.firstName = 'Required'
     if (!formData.lastName.trim()) next.lastName = 'Required'
     if (!formData.address.trim()) next.address = 'Required'
-    if (!formData.city.trim()) next.city = 'Required'
+    if (!formData.state) next.state = 'Select your state'
+    if (!formData.lga) next.lga = 'Select your local government'
     if (!PHONE_RE.test(formData.phone.replace(/\s/g, ''))) next.phone = 'Enter a valid Nigerian phone number'
     setErrors(next)
     if (Object.keys(next).length > 0) {
@@ -121,7 +131,10 @@ export default function Checkout() {
     id: Date.now(),
     ...formData,
     items: cart,
+    subtotal,
     total,
+    deliveryFee,
+    city: `${formData.lga}, ${formData.state}`,
     createdAt: new Date().toLocaleString(),
     status: 'Pending',
     ...(paymentProof ? { paymentProof } : {}),
@@ -154,7 +167,7 @@ export default function Checkout() {
         custom_fields: [
           { display_name: 'Customer Name', variable_name: 'customer_name', value: `${formData.firstName} ${formData.lastName}` },
           { display_name: 'Phone', variable_name: 'phone', value: formData.phone },
-          { display_name: 'Delivery Address', variable_name: 'address', value: `${formData.address}, ${formData.city}` },
+          { display_name: 'Delivery Address', variable_name: 'address', value: `${formData.address}, ${formData.lga}, ${formData.state}` },
         ]
       },
       callback: async (response) => {
@@ -257,7 +270,7 @@ export default function Checkout() {
                   </div>
 
                   <div className="space-y-3">
-                    <h2 className="text-base font-bold uppercase tracking-widest">Shipping Address</h2>
+                    <h2 className="text-base font-bold uppercase tracking-widest">Delivery Address</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <input type="text" name="firstName" placeholder="First name"
@@ -283,12 +296,36 @@ export default function Checkout() {
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <input type="text" name="city" placeholder="City"
-                          value={formData.city} onChange={handleInputChange}
-                          aria-invalid={!!errors.city}
-                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.city ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`} />
-                        <FieldError>{errors.city}</FieldError>
+                        <select name="state" value={formData.state} onChange={handleInputChange}
+                          aria-invalid={!!errors.state}
+                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.state ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'}`}>
+                          <option value="">Select state</option>
+                          {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <FieldError>{errors.state}</FieldError>
                       </div>
+                      <div>
+                        <select name="lga" value={formData.lga} onChange={handleInputChange}
+                          disabled={!formData.state} aria-invalid={!!errors.lga}
+                          className={`w-full border rounded p-3 text-sm outline-none transition-colors ${errors.lga ? 'border-red-400 focus:ring-1 focus:ring-red-400' : 'border-gray-300 focus:ring-1 focus:ring-black'} disabled:bg-gray-50 disabled:text-gray-400`}>
+                          <option value="">{formData.state ? 'Select local government' : 'Select a state first'}</option>
+                          {(NIGERIA[formData.state] || []).map((l) => <option key={l} value={l}>{l}</option>)}
+                        </select>
+                        <FieldError>{errors.lga}</FieldError>
+                      </div>
+                    </div>
+                    {formData.lga && (
+                      deliveryFee !== null ? (
+                        <p className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded p-3">
+                          Delivery to {formData.lga}, {formData.state}: ₦{deliveryFee.toLocaleString()}
+                        </p>
+                      ) : (
+                        <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded p-3">
+                          {DELIVERY_TBC_MESSAGE}
+                        </p>
+                      )
+                    )}
+                    <div>
                       <div>
                         <input type="tel" name="phone" placeholder="e.g. 0803 123 4567"
                           value={formData.phone} onChange={handleInputChange}
@@ -436,7 +473,7 @@ export default function Checkout() {
               <h2 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-5">Order Summary</h2>
               <div className="space-y-4 mb-6 max-h-[40vh] lg:max-h-none overflow-y-auto pr-1">
                 {cart.map(item => (
-                  <div key={item.id} className="flex items-center gap-4">
+                  <div key={item.key} className="flex items-center gap-4">
                     <div className="relative w-14 flex-shrink-0 rounded overflow-hidden" style={{ height: '4.5rem' }}>
                       <LazyImage src={item.image} alt={item.name} className="h-full w-full" />
                       <span className="absolute -top-1.5 -right-1.5 bg-gray-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold z-10">
@@ -445,6 +482,7 @@ export default function Checkout() {
                     </div>
                     <div className="flex-grow min-w-0">
                       <p className="text-sm font-medium truncate">{item.name}</p>
+                      {item.size && <p className="text-xs text-gray-400">Size {item.size}</p>}
                     </div>
                     <p className="font-medium text-sm flex-shrink-0">
                       ₦{(parseFloat(item.price) * item.quantity).toLocaleString()}
@@ -455,11 +493,13 @@ export default function Checkout() {
               <div className="border-t border-gray-200 pt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Subtotal</span>
-                  <span className="font-medium">₦{total.toLocaleString()}</span>
+                  <span className="font-medium">₦{subtotal.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Shipping</span>
-                  <span className="text-gray-500 font-medium">FREE</span>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500">Delivery</span>
+                  <span className="text-gray-500 font-medium text-right">
+                    {deliveryFee !== null ? `₦${deliveryFee.toLocaleString()}` : feeUnknown ? 'To be confirmed' : 'Select state & LGA'}
+                  </span>
                 </div>
               </div>
               <div className="border-t border-gray-200 mt-4 pt-4 flex justify-between items-center">

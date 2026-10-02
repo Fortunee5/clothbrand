@@ -3,10 +3,13 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   Trash2, Edit2, Plus, Package, ShoppingCart, LogOut, Download, X, Link as LinkIcon,
-  Upload, Menu, Search, RefreshCw, Cloud, CloudOff, ChevronDown,
+  Upload, Menu, Search, RefreshCw, Cloud, CloudOff, ChevronDown, Truck, Check,
 } from 'lucide-react'
 import { fetchOrders, updateOrderStatus } from '../lib/ordersApi'
-import { fetchProducts, getCachedProducts, saveProduct as saveProductRemote, deleteProduct as deleteProductRemote } from '../lib/productsApi'
+import { useStore } from '../lib/store'
+import { NIGERIA, STATES } from '../lib/nigeria'
+import { saveStateFees } from '../lib/deliveryApi'
+import { fetchProducts, saveProduct as saveProductRemote, deleteProduct as deleteProductRemote } from '../lib/productsApi'
 import { useToast } from '../context/ToastContext'
 import { useConfirm } from '../context/ConfirmContext'
 import Spinner from '../components/Spinner'
@@ -26,8 +29,8 @@ const STATUS_COLORS = {
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('products')
-  const [products, setProducts] = useState(getCachedProducts())
-  const [productsLoading, setProductsLoading] = useState(getCachedProducts().length === 0)
+  const { products, delivery } = useStore()
+  const [productsLoading, setProductsLoading] = useState(products.length === 0)
   const [productsSource, setProductsSource] = useState(null) // 'cloud' | 'local'
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(true)
@@ -48,7 +51,6 @@ export default function AdminDashboard() {
     const { products: fetched, source, reason, error } = await fetchProducts()
     // Nothing saved anywhere yet (first run) — seed with the sample catalog
     // so the storefront/admin aren't empty, same as before.
-    setProducts(fetched)
     setProductsSource(source)
     setProductsLoading(false)
 
@@ -68,8 +70,8 @@ export default function AdminDashboard() {
     }
   }
 
-  const loadOrders = async (showToast = false) => {
-    setOrdersLoading(true)
+  const loadOrders = async (showToast = false, silent = false) => {
+    if (!silent) setOrdersLoading(true)
     const { orders: fetched, source, reason, error } = await fetchOrders()
     setOrders(fetched)
     setOrdersSource(source)
@@ -92,7 +94,7 @@ export default function AdminDashboard() {
     // reason === 'error' — log the real cause to the console for debugging
     // and show a short version in the toast.
     const detail = error?.message ? ` (${error.message.slice(0, 100)})` : ''
-    toast(`Could not reach the order backend — showing orders saved on this device only.${detail}`, {
+    if (!silent) toast(`Could not reach the order backend — showing orders saved on this device only.${detail}`, {
       type: 'error',
       duration: 8000,
     })
@@ -104,6 +106,9 @@ export default function AdminDashboard() {
 
     loadProducts()
     loadOrders()
+    // Live: orders re-sync quietly every 15s (products + delivery fees re-sync via the shared store)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') loadOrders(false, true) }, 15000)
+    return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate])
 
@@ -126,7 +131,6 @@ export default function AdminDashboard() {
   const deleteProduct = async (id, name) => {
     const ok = await confirm(`This will permanently remove "${name}" from your shop.`, { title: 'Delete product?' })
     if (!ok) return
-    setProducts(prev => prev.filter(p => p.id !== id))
     const { synced } = await deleteProductRemote(id)
     toast(
       synced ? 'Product deleted.' : 'Deleted locally — will sync to the cloud once online.',
@@ -163,10 +167,6 @@ export default function AdminDashboard() {
     const isEditing = !!editingProduct
     const { synced, product: saved, reason } = await saveProductRemote(product)
 
-    setProducts(prev => {
-      const idx = prev.findIndex(p => p.id === saved.id)
-      return idx >= 0 ? prev.map(p => (p.id === saved.id ? saved : p)) : [...prev, saved]
-    })
     setIsAddingProduct(false)
     setEditingProduct(null)
 
@@ -233,6 +233,13 @@ export default function AdminDashboard() {
                 <ShoppingCart size={15} />
                 <span>Orders</span>
               </button>
+              <button
+                onClick={() => setActiveTab('delivery')}
+                className={`flex items-center space-x-2 px-4 py-2 text-xs font-bold uppercase tracking-widest rounded transition-colors ${activeTab === 'delivery' ? 'bg-black text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+              >
+                <Truck size={15} />
+                <span>Delivery</span>
+              </button>
             </nav>
 
             <div className="flex items-center space-x-2">
@@ -271,6 +278,13 @@ export default function AdminDashboard() {
             >
               <ShoppingCart size={16} />
               <span>Orders</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('delivery'); setMobileMenuOpen(false) }}
+              className={`w-full flex items-center space-x-3 px-3 py-2.5 text-sm font-bold uppercase tracking-widest rounded ${activeTab === 'delivery' ? 'bg-black text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <Truck size={16} />
+              <span>Delivery</span>
             </button>
             <button
               onClick={handleLogout}
@@ -424,6 +438,9 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
+
+        {/* Delivery Tab */}
+        {activeTab === 'delivery' && <DeliveryTab delivery={delivery} />}
 
         {/* Orders Tab */}
         {activeTab === 'orders' && (
@@ -637,6 +654,7 @@ function ProductForm({ product, onSave, onClose }) {
     price: product?.price || '',
     category: product?.category || '',
   })
+  const [sizesText, setSizesText] = useState((product?.sizes || []).join(', '))
   const [images, setImages] = useState(product?.images || [])
   const [urlInput, setUrlInput] = useState('')
   const [imageTab, setImageTab] = useState('upload') // 'upload' | 'url'
@@ -697,7 +715,8 @@ function ProductForm({ product, onSave, onClose }) {
     // take a few seconds, and onSave (in AdminDashboard) is what actually
     // performs that upload — closing the modal early would make it look
     // like the save silently vanished.
-    await onSave({ ...formData, id: product?.id, images })
+    const sizes = [...new Set(sizesText.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean))]
+    await onSave({ ...formData, id: product?.id, images, sizes })
     setSubmitting(false)
   }
 
@@ -761,6 +780,26 @@ function ProductForm({ product, onSave, onClose }) {
                 placeholder="e.g. Dresses"
               />
             </div>
+          </div>
+
+          {/* Sizes */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Sizes (optional)</label>
+            <input
+              type="text"
+              value={sizesText}
+              onChange={(e) => setSizesText(e.target.value)}
+              className="w-full border border-gray-300 p-3 rounded outline-none focus:ring-2 focus:ring-black text-sm"
+              placeholder="e.g. 12, 16, 20 — separate with commas"
+            />
+            {sizesText.trim() && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[...new Set(sizesText.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean))].map((s) => (
+                  <span key={s} className="px-2.5 py-1 border border-gray-200 text-xs font-semibold rounded">{s}</span>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1.5">Customers must pick one of these before adding to bag. Leave empty for one-size items.</p>
           </div>
 
           {/* Description */}
@@ -891,5 +930,110 @@ function ProductForm({ product, onSave, onClose }) {
       </div>
     </div>,
     document.body
+  )
+}
+
+
+// ── Delivery fees: admin prices every state / local government ───────────
+function DeliveryTab({ delivery }) {
+  const { toast } = useToast()
+  const [stateName, setStateName] = useState('Lagos')
+  const [draft, setDraft] = useState({})
+  const [bulk, setBulk] = useState('')
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const lgas = NIGERIA[stateName] || []
+
+  // Load the saved prices for the selected state into the editable draft
+  useEffect(() => {
+    const saved = delivery[stateName] || {}
+    setDraft(Object.fromEntries(lgas.map((l) => [l, saved[l] ?? ''])))
+    setBulk('')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stateName, JSON.stringify(delivery[stateName] || {})])
+
+  const pricedCount = (s) => Object.keys(delivery[s] || {}).length
+  const visible = lgas.filter((l) => l.toLowerCase().includes(search.trim().toLowerCase()))
+  const dirty = lgas.some((l) => String(draft[l] ?? '') !== String((delivery[stateName] || {})[l] ?? ''))
+
+  const applyBulk = () => {
+    if (bulk === '' || Number(bulk) < 0) return
+    setDraft((d) => ({ ...d, ...Object.fromEntries(visible.map((l) => [l, bulk])) }))
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const { synced, reason } = await saveStateFees(stateName, draft)
+    setSaving(false)
+    if (synced) toast(`${stateName} delivery prices saved.`, { type: 'success' })
+    else if (reason === 'not_configured') toast('Saved on this device only — set up cloud sync first.', { type: 'info' })
+    else toast('Saved locally — could not reach the backend. Try again.', { type: 'error' })
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold uppercase tracking-tight">Delivery Prices</h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Set a price per local government. Any LGA left blank shows customers: "pls note our team would reach out to about the delivery cost to your destination".
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+        {/* State list */}
+        <div className="bg-white border border-gray-200 rounded max-h-[70vh] overflow-y-auto">
+          {STATES.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStateName(s)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm border-b border-gray-100 transition-colors ${stateName === s ? 'bg-black text-white' : 'hover:bg-gray-50'}`}
+            >
+              <span className="font-semibold">{s}</span>
+              <span className={`text-[10px] font-bold ${stateName === s ? 'text-gray-300' : pricedCount(s) ? 'text-green-600' : 'text-gray-300'}`}>
+                {pricedCount(s)}/{NIGERIA[s].length}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* LGA prices */}
+        <div className="lg:col-span-3 bg-white border border-gray-200 rounded">
+          <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <h3 className="font-bold uppercase tracking-wide text-sm">{stateName} <span className="text-gray-400 font-medium">· {lgas.length} LGAs</span></h3>
+            <div className="flex flex-wrap gap-2">
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search LGA…"
+                className="border border-gray-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black w-full sm:w-40" />
+              <input type="number" min="0" value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder="₦ for all shown"
+                className="border border-gray-300 rounded px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black w-full sm:w-36" />
+              <button onClick={applyBulk} disabled={bulk === ''}
+                className="px-3 py-2 text-xs font-bold uppercase tracking-widest border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">Apply</button>
+            </div>
+          </div>
+
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[58vh] overflow-y-auto">
+            {visible.map((l) => (
+              <label key={l} className="flex items-center justify-between gap-3 border border-gray-200 rounded px-3 py-2">
+                <span className="text-sm font-medium truncate">{l}</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  <span className="text-gray-400 text-sm">₦</span>
+                  <input type="number" min="0" inputMode="numeric" value={draft[l] ?? ''}
+                    onChange={(e) => setDraft((d) => ({ ...d, [l]: e.target.value }))}
+                    placeholder="—" className="w-24 border border-gray-300 rounded px-2 py-1.5 text-sm text-right outline-none focus:ring-2 focus:ring-black" />
+                </span>
+              </label>
+            ))}
+            {visible.length === 0 && <p className="text-sm text-gray-400 col-span-full">No local government matches your search.</p>}
+          </div>
+
+          <div className="p-4 border-t border-gray-100 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-400">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</p>
+            <button onClick={save} disabled={saving || !dirty}
+              className="flex items-center gap-2 bg-black text-white px-6 py-2.5 text-xs font-bold uppercase tracking-widest rounded hover:bg-gray-900 disabled:opacity-40">
+              {saving ? <Spinner size={14} /> : <Check size={14} />} Save {stateName}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

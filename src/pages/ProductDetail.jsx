@@ -6,7 +6,7 @@ import LazyImage from '../components/LazyImage'
 import { useToast } from '../context/ToastContext'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, EASE } from '../lib/gsap'
-import { fetchProducts, getCachedProducts } from '../lib/productsApi'
+import { useStore, loadFullProduct } from '../lib/store'
 
 
 export default function ProductDetail() {
@@ -15,18 +15,20 @@ export default function ProductDetail() {
   const { toast } = useToast()
   const [quantity, setQuantity] = useState(1)
   const [currentImage, setCurrentImage] = useState(0)
-  const [products, setProducts] = useState(getCachedProducts())
+  const { products } = useStore()
+  const [size, setSize] = useState('')
+  const [sizeError, setSizeError] = useState(false)
   const [added, setAdded] = useState(false)
   const infoRef = useRef(null)
   const ctaRef = useRef(null)
 
-  useEffect(() => {
-    fetchProducts().then(({ products: fetched }) => {
-      setProducts(fetched)
-    })
-  }, [])
+  const product = products.find((p) => String(p.id) === String(id))
+  const sizes = product?.sizes || []
 
-  const product = products.find((p) => p.id === parseInt(id))
+  // The list only carries the first photo (so pages load fast) — pull the
+  // full gallery for this product in the background.
+  useEffect(() => { loadFullProduct(id) }, [id])
+  useEffect(() => { setSize(''); setSizeError(false) }, [id])
 
   // Entrance animation for the info column once the product is known.
   useGsapContext(() => {
@@ -50,9 +52,14 @@ export default function ProductDetail() {
   }
 
   const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) addToCart(product)
+    if (sizes.length > 0 && !size) {
+      setSizeError(true)
+      toast('Please select a size first.', { type: 'error' })
+      return
+    }
+    addToCart(product, size, quantity)
     setAdded(true)
-    toast(`Added ${quantity} × ${product.name} to your bag.`, { type: 'success' })
+    toast(`Added ${quantity} × ${product.name}${size ? ` (size ${size})` : ''} to your bag.`, { type: 'success' })
     if (ctaRef.current) {
       gsap.fromTo(ctaRef.current, { scale: 0.96 }, { scale: 1, duration: 0.35, ease: 'back.out(2.5)' })
     }
@@ -122,6 +129,31 @@ export default function ProductDetail() {
               <p className="text-gray-600 text-sm leading-relaxed">{product.description}</p>
             </div>
 
+            {/* Size — required before adding to bag */}
+            {sizes.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2">
+                  Size {size && <span className="text-black">· {size}</span>}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => { setSize(s); setSizeError(false) }}
+                      aria-pressed={size === s}
+                      className={`min-w-[3rem] h-11 px-4 text-sm font-semibold border transition-colors ${
+                        size === s ? 'bg-[#0D0F1C] text-white border-[#0D0F1C]' : 'bg-white text-gray-700 border-gray-200 hover:border-black'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {sizeError && <p className="mt-2 text-xs font-medium text-red-500">Please select a size to continue.</p>}
+              </div>
+            )}
+
             {/* Quantity */}
             <div className="flex items-center gap-4">
               <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Qty</span>
@@ -161,7 +193,7 @@ export default function ProductDetail() {
             {/* Trust badges */}
             <div className="border-t border-gray-100 pt-5 space-y-3">
               {[
-                { icon: Truck, text: 'Free delivery on orders over ₦30,000' },
+                { icon: Truck, text: 'Free delivery on orders over ₦500,000' },
                 { icon: RefreshCw, text: '14-day returns — no questions asked' },
                 { icon: Shield, text: 'Secure checkout via Paystack' },
               ].map(({ icon: Icon, text }) => (

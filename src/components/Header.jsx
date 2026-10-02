@@ -59,7 +59,7 @@ export default function Header() {
       >
         {/* Announcement bar */}
         <div className="bg-[#0D0F1C] text-[#C9A24B] text-[10px] tracking-[0.2em] uppercase font-medium py-2 text-center hidden sm:block">
-          Free shipping on orders over ₦100,000 · Lagos & nationwide delivery
+          Free delivery on orders over ₦500,000 · Lagos & nationwide delivery
         </div>
 
         <div className="container mx-auto px-4 sm:px-6">
@@ -170,7 +170,7 @@ export default function Header() {
 
         <div className="px-5 py-4 border-t border-gray-100 bg-[#0D0F1C]" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
           <p className="text-[#C9A24B] text-[10px] tracking-[0.2em] uppercase font-medium text-center">
-            Free shipping over ₦100,000
+            Free delivery over ₦500,000
           </p>
         </div>
       </div>

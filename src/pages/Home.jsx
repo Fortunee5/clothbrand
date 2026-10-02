@@ -4,27 +4,21 @@ import { ArrowRight, Shield, RefreshCw, Truck, Headphones } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, ScrollTrigger, EASE } from '../lib/gsap'
-import { fetchProducts, getCachedProducts } from '../lib/productsApi'
+import { useStore } from '../lib/store'
 
 
 const trustFeatures = [
-  { icon: Truck, label: 'Free Delivery', desc: 'On orders over ₦100,000' },
+  { icon: Truck, label: 'Free Delivery', desc: 'On orders over ₦500,000' },
   { icon: RefreshCw, label: 'Easy Returns', desc: '14-day hassle-free returns' },
   { icon: Shield, label: 'Secure Payment', desc: 'Protected by Paystack' },
   { icon: Headphones, label: 'Customer Care', desc: 'Mon–Sat, 9am–6pm' },
 ]
 
 export default function Home() {
-  const [products, setProducts] = useState(getCachedProducts())
+  const { products } = useStore()
   const heroRef = useRef(null)
   const rootRef = useRef(null)
   const marqueeRef = useRef(null)
-
-  useEffect(() => {
-    fetchProducts().then(({ products: fetched }) => {
-      setProducts(fetched)
-    })
-  }, [])
 
   // Hero entrance — runs once on mount, above the fold.
   useGsapContext(() => {
