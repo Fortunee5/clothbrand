@@ -6,7 +6,7 @@ import {
   Upload, Menu, Search, RefreshCw, Cloud, CloudOff, ChevronDown, Truck, Check,
 } from 'lucide-react'
 import { fetchOrders, updateOrderStatus } from '../lib/ordersApi'
-import { useStore } from '../lib/store'
+import { useStore, loadFullProduct, getState } from '../lib/store'
 import { NIGERIA, STATES } from '../lib/nigeria'
 import { saveStateFees } from '../lib/deliveryApi'
 import { fetchProducts, saveProduct as saveProductRemote, deleteProduct as deleteProductRemote } from '../lib/productsApi'
@@ -180,6 +180,12 @@ export default function AdminDashboard() {
     } else {
       toast(`Saved locally — will sync to the cloud once online.`, { type: 'info', duration: 6000 })
     }
+  }
+
+  // Make sure ALL photos are loaded before editing, otherwise saving would drop them.
+  const openEditor = async (p) => {
+    await loadFullProduct(p.id)
+    setEditingProduct(getState().products.find((x) => String(x.id) === String(p.id)) || p)
   }
 
   const changeOrderStatus = async (id, status) => {
@@ -399,7 +405,7 @@ export default function AdminDashboard() {
                           <td className="p-4 font-bold">₦{parseFloat(p.price).toLocaleString()}</td>
                           <td className="p-4 text-right">
                             <div className="flex justify-end space-x-1">
-                              <button onClick={() => setEditingProduct(p)} className="p-2 hover:bg-blue-50 rounded text-blue-600 transition-colors" aria-label={`Edit ${p.name}`}>
+                              <button onClick={() => openEditor(p)} className="p-2 hover:bg-blue-50 rounded text-blue-600 transition-colors" aria-label={`Edit ${p.name}`}>
                                 <Edit2 size={15} />
                               </button>
                               <button onClick={() => deleteProduct(p.id, p.name)} className="p-2 hover:bg-red-50 rounded text-red-500 transition-colors" aria-label={`Delete ${p.name}`}>
@@ -424,7 +430,7 @@ export default function AdminDashboard() {
                         <p className="font-bold text-base mt-2">₦{parseFloat(p.price).toLocaleString()}</p>
                       </div>
                       <div className="flex flex-col gap-2 flex-shrink-0">
-                        <button onClick={() => setEditingProduct(p)} className="p-2 bg-blue-50 rounded text-blue-600" aria-label={`Edit ${p.name}`}>
+                        <button onClick={() => openEditor(p)} className="p-2 bg-blue-50 rounded text-blue-600" aria-label={`Edit ${p.name}`}>
                           <Edit2 size={15} />
                         </button>
                         <button onClick={() => deleteProduct(p.id, p.name)} className="p-2 bg-red-50 rounded text-red-500" aria-label={`Delete ${p.name}`}>

@@ -151,36 +151,70 @@ export default function Checkout() {
   }
 
   // Paystack popup handler
+  // Charges `total` = items + delivery fee (delivery is ₦0 when the admin hasn't
+  // priced the chosen LGA yet, so card payment still works in that case).
   const initiateCardPayment = () => {
     if (!window.PaystackPop) {
       toast('Payment system is still loading — please try again in a moment.', { type: 'error' })
       return
     }
+    const amountKobo = Math.round(Number(total) * 100)
+    if (!Number.isFinite(amountKobo) || amountKobo <= 0) {
+      toast('Could not work out your total — please refresh and try again.', { type: 'error' })
+      return
+    }
     setLoading(true)
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_PUBLIC_KEY,
-      email: formData.email,
-      amount: Math.round(total * 100), // Paystack uses kobo (smallest unit)
-      currency: 'NGN',
-      ref: `TSYH-${Date.now()}`,
-      metadata: {
-        custom_fields: [
-          { display_name: 'Customer Name', variable_name: 'customer_name', value: `${formData.firstName} ${formData.lastName}` },
-          { display_name: 'Phone', variable_name: 'phone', value: formData.phone },
-          { display_name: 'Delivery Address', variable_name: 'address', value: `${formData.address}, ${formData.lga}, ${formData.state}` },
-        ]
-      },
-      callback: async (response) => {
+
+    // Safety net: if no Paystack window ever appears, stop the endless "Processing…"
+    let opened = false
+    const watchdog = setTimeout(() => {
+      if (!opened && !document.querySelector('iframe[src*="paystack"], iframe[name*="paystack"]')) {
+        setLoading(false)
+        toast('The card window could not open. Check your connection or disable ad-blockers, then try again.', { type: 'error', duration: 7000 })
+      }
+    }, 12000)
+
+    // Paystack's callback must be a plain function (not async), so the async work lives inside it.
+    const onSuccess = (response) => {
+      opened = true
+      clearTimeout(watchdog)
+      ;(async () => {
         const order = buildOrder({ status: 'Paid', paystackRef: response.reference })
         await finalizeOrder(order)
         setLoading(false)
-      },
-      onClose: () => {
-        setLoading(false)
-        toast('Payment cancelled.', { type: 'info' })
-      },
-    })
-    handler.openIframe()
+      })()
+    }
+
+    try {
+      const handler = window.PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: formData.email.trim(),
+        amount: amountKobo, // kobo
+        currency: 'NGN',
+        ref: `TSYH-${Date.now()}`,
+        metadata: {
+          custom_fields: [
+            { display_name: 'Customer Name', variable_name: 'customer_name', value: `${formData.firstName} ${formData.lastName}` },
+            { display_name: 'Phone', variable_name: 'phone', value: formData.phone },
+            { display_name: 'Delivery Address', variable_name: 'address', value: `${formData.address}, ${formData.lga}, ${formData.state}` },
+            { display_name: 'Delivery Fee', variable_name: 'delivery_fee', value: deliveryFee !== null ? String(deliveryFee) : 'To be confirmed' },
+          ],
+        },
+        callback: onSuccess,
+        onClose: () => {
+          opened = true
+          clearTimeout(watchdog)
+          setLoading(false)
+          toast('Payment cancelled.', { type: 'info' })
+        },
+      })
+      handler.openIframe()
+    } catch (err) {
+      clearTimeout(watchdog)
+      console.error('[checkout] Paystack failed to open:', err)
+      setLoading(false)
+      toast(`Could not open the payment window${err?.message ? ` (${err.message})` : ''}. Please try again.`, { type: 'error', duration: 7000 })
+    }
   }
 
   const handleProofUpload = async (e) => {

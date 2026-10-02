@@ -51,20 +51,47 @@ export function removeProduct(id) {
 }
 export function setDelivery(delivery) { set({ delivery }) }
 
-// The list endpoint only carries each product's FIRST image (keeps the payload
-// small and fast). If we already hold the full gallery for the same version of
-// a product, keep it instead of shrinking it back down.
+// The list endpoint returns TEXT ONLY (fast). Photos arrive separately via
+// get_thumbs and are kept in IndexedDB, so repeat visits paint instantly.
+// A cached photo is reused as long as the product's updatedAt is unchanged.
 function mergeProducts(remote) {
   const cached = new Map(state.products.map((p) => [String(p.id), p]))
   const merged = remote.map((p) => {
     const c = cached.get(String(p.id))
     const sizes = Array.isArray(p.sizes) ? p.sizes : []
-    if (c && c.updatedAt === p.updatedAt && c.images?.length > (p.images?.length || 0)) return { ...p, sizes, images: c.images }
-    return { ...p, sizes }
+    const keep = c && c.updatedAt === p.updatedAt && c.images?.length ? c.images : (c && pending.has(String(p.id)) ? c.images : [])
+    return { ...p, sizes, images: keep || [] }
   })
   const ids = new Set(merged.map((p) => String(p.id)))
   const localOnly = state.products.filter((p) => pending.has(String(p.id)) && !ids.has(String(p.id)))
   return [...merged, ...localOnly]
+}
+
+// Fetch first photos for products that don't have one yet: small parallel
+// batches so the first photos appear within a moment and the rest stream in.
+let thumbBusy = false
+async function loadThumbs() {
+  if (thumbBusy || !isConfigured()) return
+  thumbBusy = true
+  try {
+    const need = state.products.filter((p) => p.hasImage !== false && !p.images?.length).map((p) => String(p.id))
+    const batches = []
+    for (let i = 0; i < need.length; i += 4) batches.push(need.slice(i, i + 4))
+    let next = 0
+    const worker = async () => {
+      while (next < batches.length) {
+        const ids = batches[next++]
+        try {
+          const data = await gasGet({ action: 'get_thumbs', ids: ids.join(',') })
+          if (data.success && data.thumbs) {
+            const t = data.thumbs
+            set({ products: state.products.map((p) => (t[String(p.id)] && !p.images?.length ? { ...p, images: [t[String(p.id)]] } : p)) })
+          }
+        } catch (e) { console.error('[store] thumbs failed:', e) }
+      }
+    }
+    await Promise.all([worker(), worker(), worker()])
+  } finally { thumbBusy = false }
 }
 
 export function refresh() {
@@ -74,6 +101,7 @@ export function refresh() {
     .then((data) => {
       if (!data.success) throw new Error(data.error || 'Failed to load store data')
       set({ products: mergeProducts(data.products || []), delivery: data.delivery || {}, ready: true, source: 'cloud', error: null })
+      loadThumbs()
       return state
     })
     .catch((error) => { console.error('[store] refresh failed:', error); set({ ready: true, source: 'local', error }, false); return state })
@@ -90,10 +118,22 @@ export async function loadFullProduct(id) {
   } catch (e) { console.error('[store] loadFullProduct failed:', e) }
 }
 
+// Open the connection to Google early (saves a few hundred ms on first request)
+if (typeof document !== 'undefined') {
+  ;['https://script.google.com', 'https://script.googleusercontent.com'].forEach((href) => {
+    const l = document.createElement('link'); l.rel = 'preconnect'; l.href = href; l.crossOrigin = ''; document.head.appendChild(l)
+  })
+}
+
 // Boot: show cached data immediately, then refresh from the backend.
+refresh() // start the network request immediately, in parallel with the cache read
 idbGet('snapshot').then((snap) => {
-  if (snap && !state.ready) { pending = new Set(snap.pending || []); set({ products: snap.products || [], delivery: snap.delivery || {} }, false) }
-}).finally(refresh)
+  if (!snap) return
+  pending = new Set([...(snap.pending || []), ...pending])
+  // only use the cache if the network hasn't already answered
+  if (state.source !== 'cloud') set({ products: snap.products || [], delivery: snap.delivery || {} }, false)
+  loadThumbs()
+})
 
 if (typeof document !== 'undefined') {
   setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 20000)
