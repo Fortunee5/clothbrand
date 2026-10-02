@@ -1,7 +1,7 @@
 import { isConfigured, gasPost, ADMIN_KEY } from './backendConfig'
 import { getState, setDelivery, refresh } from './store'
 
-export const DELIVERY_TBC_MESSAGE = 'pls note our team would reach out to about the delivery cost to your destination'
+export const DELIVERY_TBC_MESSAGE = 'pls note our team would reach out to you about the delivery cost to your destination'
 
 // Returns a number if the admin priced this LGA, otherwise null.
 export function getDeliveryFee(delivery, state, lga) {
