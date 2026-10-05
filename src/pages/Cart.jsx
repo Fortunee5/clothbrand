@@ -64,7 +64,7 @@ export default function Cart() {
                   <div className="flex justify-between gap-2">
                     <div className="min-w-0">
                       <h3 className="font-bold uppercase tracking-wide text-sm leading-tight line-clamp-2">{item.name}</h3>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-[0.12em] mt-1">{item.category}{item.size ? ` · Size ${item.size}` : ''}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-[0.12em] mt-1">{item.category}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''}</p>
                     </div>
                     <button
                       aria-label="Remove item"

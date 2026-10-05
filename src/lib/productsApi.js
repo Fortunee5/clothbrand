@@ -12,13 +12,13 @@ export async function fetchProducts() {
 // Saves instantly into the shared store (every page updates at once), then
 // syncs to the Google Sheet. Images are saved straight into the sheet.
 export async function saveProduct(product) {
-  const optimistic = { ...product, id: product.id || Date.now(), sizes: product.sizes || [] }
+  const optimistic = { ...product, id: product.id || Date.now(), sizes: product.sizes || [], colors: product.colors || [], inStock: product.inStock !== false }
   upsertProduct(optimistic, { markPending: true })
   if (!isConfigured()) return { synced: false, reason: 'not_configured', product: optimistic }
   try {
     const data = await gasPost({ action: 'save_product', product: optimistic })
     if (!data.success) throw new Error(data.error || 'Unknown error saving product')
-    const saved = { ...data.product, sizes: data.product.sizes || [] }
+    const saved = { ...data.product, sizes: data.product.sizes || [], colors: data.product.colors || [], inStock: data.product.inStock !== false }
     upsertProduct(saved)
     return { synced: true, product: saved }
   } catch (err) {

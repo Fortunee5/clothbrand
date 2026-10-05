@@ -84,6 +84,11 @@ export default function Shop() {
                     className="h-full w-full"
                     imgClassName="transition-transform duration-700 group-hover:scale-[1.05]"
                   />
+                  {product.inStock === false && (
+                    <div className="absolute inset-0 z-10 bg-white/55 flex items-center justify-center">
+                      <span className="bg-[#0D0F1C] text-white text-[10px] font-bold uppercase tracking-[0.18em] px-3 py-1.5">Out of Stock</span>
+                    </div>
+                  )}
                   <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-2.5 z-10">
                     <span className="text-white text-[9px] font-bold uppercase tracking-[0.15em]">Quick View</span>
                   </div>

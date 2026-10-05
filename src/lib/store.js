@@ -60,7 +60,7 @@ function mergeProducts(remote) {
     const c = cached.get(String(p.id))
     const sizes = Array.isArray(p.sizes) ? p.sizes : []
     const keep = c && c.updatedAt === p.updatedAt && c.images?.length ? c.images : (c && pending.has(String(p.id)) ? c.images : [])
-    return { ...p, sizes, images: keep || [] }
+    return { ...p, sizes, colors: Array.isArray(p.colors) ? p.colors : [], inStock: p.inStock !== false, images: keep || [] }
   })
   const ids = new Set(merged.map((p) => String(p.id)))
   const localOnly = state.products.filter((p) => pending.has(String(p.id)) && !ids.has(String(p.id)))
@@ -114,7 +114,7 @@ export async function loadFullProduct(id) {
   if (!isConfigured()) return
   try {
     const data = await gasGet({ action: 'get_product', id: String(id) })
-    if (data.success && data.product) upsertProduct({ ...data.product, sizes: data.product.sizes || [] }, { markPending: pending.has(String(id)) })
+    if (data.success && data.product) upsertProduct({ ...data.product, sizes: data.product.sizes || [], colors: data.product.colors || [], inStock: data.product.inStock !== false }, { markPending: pending.has(String(id)) })
   } catch (e) { console.error('[store] loadFullProduct failed:', e) }
 }
 

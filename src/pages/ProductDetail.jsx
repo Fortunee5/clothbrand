@@ -18,17 +18,21 @@ export default function ProductDetail() {
   const { products } = useStore()
   const [size, setSize] = useState('')
   const [sizeError, setSizeError] = useState(false)
+  const [color, setColor] = useState('')
+  const [colorError, setColorError] = useState(false)
   const [added, setAdded] = useState(false)
   const infoRef = useRef(null)
   const ctaRef = useRef(null)
 
   const product = products.find((p) => String(p.id) === String(id))
   const sizes = product?.sizes || []
+  const colors = product?.colors || []
+  const outOfStock = product?.inStock === false
 
   // The list only carries the first photo (so pages load fast) — pull the
   // full gallery for this product in the background.
   useEffect(() => { loadFullProduct(id) }, [id])
-  useEffect(() => { setSize(''); setSizeError(false) }, [id])
+  useEffect(() => { setSize(''); setSizeError(false); setColor(''); setColorError(false) }, [id])
 
   // Entrance animation for the info column once the product is known.
   useGsapContext(() => {
@@ -52,14 +56,20 @@ export default function ProductDetail() {
   }
 
   const handleAddToCart = () => {
+    if (outOfStock) return
     if (sizes.length > 0 && !size) {
       setSizeError(true)
       toast('Please select a size first.', { type: 'error' })
       return
     }
-    addToCart(product, size, quantity)
+    if (colors.length > 0 && !color) {
+      setColorError(true)
+      toast('Please select a colour first.', { type: 'error' })
+      return
+    }
+    addToCart(product, size, quantity, color)
     setAdded(true)
-    toast(`Added ${quantity} × ${product.name}${size ? ` (size ${size})` : ''} to your bag.`, { type: 'success' })
+    toast(`Added ${quantity} × ${product.name}${size ? ` (size ${size})` : ''}${color ? ` (${color})` : ''} to your bag.`, { type: 'success' })
     if (ctaRef.current) {
       gsap.fromTo(ctaRef.current, { scale: 0.96 }, { scale: 1, duration: 0.35, ease: 'back.out(2.5)' })
     }
@@ -154,6 +164,31 @@ export default function ProductDetail() {
               </div>
             )}
 
+            {/* Colour — required before adding to bag */}
+            {colors.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2">
+                  Colour {color && <span className="text-black">· {color}</span>}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {colors.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => { setColor(c); setColorError(false) }}
+                      aria-pressed={color === c}
+                      className={`min-w-[3rem] h-11 px-4 text-sm font-semibold border transition-colors ${
+                        color === c ? 'bg-[#0D0F1C] text-white border-[#0D0F1C]' : 'bg-white text-gray-700 border-gray-200 hover:border-black'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                {colorError && <p className="mt-2 text-xs font-medium text-red-500">Please select a colour to continue.</p>}
+              </div>
+            )}
+
             {/* Quantity */}
             <div className="flex items-center gap-4">
               <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Qty</span>
@@ -176,24 +211,33 @@ export default function ProductDetail() {
               </div>
             </div>
 
+            {outOfStock && (
+              <p className="text-sm font-semibold text-red-600 bg-red-50 border border-red-200 px-4 py-3">
+                This item is currently out of stock and can't be purchased right now.
+              </p>
+            )}
+
             {/* CTA */}
             <button
               ref={ctaRef}
               onClick={handleAddToCart}
+              disabled={outOfStock}
               className={`w-full py-4 sm:py-5 font-bold uppercase tracking-[0.14em] text-sm flex items-center justify-center gap-3 transition-all duration-300 active:scale-[0.98] ${
-                added
+                outOfStock
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : added
                   ? 'bg-green-600 text-white'
                   : 'bg-[#0D0F1C] text-white hover:bg-[#C9A24B]'
               }`}
             >
               <ShoppingBag size={18} />
-              {added ? 'Added to Bag!' : 'Add to Bag'}
+              {outOfStock ? 'Out of Stock' : added ? 'Added to Bag!' : 'Add to Bag'}
             </button>
 
             {/* Trust badges */}
             <div className="border-t border-gray-100 pt-5 space-y-3">
               {[
-                { icon: Truck, text: 'Free delivery on orders over ₦500,000' },
+                { icon: Truck, text: 'Free delivery on orders over ₦30,000' },
                 { icon: RefreshCw, text: '14-day returns — no questions asked' },
                 { icon: Shield, text: 'Secure checkout via Paystack' },
               ].map(({ icon: Icon, text }) => (

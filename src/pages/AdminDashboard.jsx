@@ -401,6 +401,7 @@ export default function AdminDashboard() {
                           <td className="p-4 font-medium">{p.name}</td>
                           <td className="p-4">
                             <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-[10px] font-bold uppercase tracking-wide">{p.category}</span>
+                            <span className={`ml-1.5 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide ${p.inStock === false ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{p.inStock === false ? 'Out of stock' : 'In stock'}</span>
                           </td>
                           <td className="p-4 font-bold">₦{parseFloat(p.price).toLocaleString()}</td>
                           <td className="p-4 text-right">
@@ -427,6 +428,7 @@ export default function AdminDashboard() {
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm truncate">{p.name}</p>
                         <span className="inline-block mt-1 px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px] font-bold uppercase tracking-wide">{p.category}</span>
+                        <span className={`inline-block mt-1 ml-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${p.inStock === false ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700'}`}>{p.inStock === false ? 'Out of stock' : 'In stock'}</span>
                         <p className="font-bold text-base mt-2">₦{parseFloat(p.price).toLocaleString()}</p>
                       </div>
                       <div className="flex flex-col gap-2 flex-shrink-0">
@@ -661,6 +663,8 @@ function ProductForm({ product, onSave, onClose }) {
     category: product?.category || '',
   })
   const [sizesText, setSizesText] = useState((product?.sizes || []).join(', '))
+  const [colorsText, setColorsText] = useState((product?.colors || []).join(', '))
+  const [inStock, setInStock] = useState(product ? product.inStock !== false : true)
   const [images, setImages] = useState(product?.images || [])
   const [urlInput, setUrlInput] = useState('')
   const [imageTab, setImageTab] = useState('upload') // 'upload' | 'url'
@@ -722,7 +726,8 @@ function ProductForm({ product, onSave, onClose }) {
     // performs that upload — closing the modal early would make it look
     // like the save silently vanished.
     const sizes = [...new Set(sizesText.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean))]
-    await onSave({ ...formData, id: product?.id, images, sizes })
+    const colors = [...new Set(colorsText.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean))]
+    await onSave({ ...formData, id: product?.id, images, sizes, colors, inStock })
     setSubmitting(false)
   }
 
@@ -806,6 +811,49 @@ function ProductForm({ product, onSave, onClose }) {
               </div>
             )}
             <p className="text-[10px] text-gray-400 mt-1.5">Customers must pick one of these before adding to bag. Leave empty for one-size items.</p>
+          </div>
+
+          {/* Colours */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Colours (optional)</label>
+            <input
+              type="text"
+              value={colorsText}
+              onChange={(e) => setColorsText(e.target.value)}
+              className="w-full border border-gray-300 p-3 rounded outline-none focus:ring-2 focus:ring-black text-sm"
+              placeholder="e.g. Black, Red, Royal Blue — separate with commas"
+            />
+            {colorsText.trim() && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {[...new Set(colorsText.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean))].map((c) => (
+                  <span key={c} className="px-2.5 py-1 border border-gray-200 text-xs font-semibold rounded">{c}</span>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-gray-400 mt-1.5">Customers must pick one before adding to bag. Leave empty if there is only one colour.</p>
+          </div>
+
+          {/* Stock status */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1.5">Stock status *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[{ v: true, label: 'In Stock' }, { v: false, label: 'Out of Stock' }].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  onClick={() => setInStock(o.v)}
+                  aria-pressed={inStock === o.v}
+                  className={`py-3 text-xs font-bold uppercase tracking-widest border rounded transition-colors ${
+                    inStock === o.v
+                      ? (o.v ? 'bg-green-600 text-white border-green-600' : 'bg-red-600 text-white border-red-600')
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-black'
+                  }`}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-1.5">Out of Stock products stay visible to customers but can't be bought.</p>
           </div>
 
           {/* Description */}

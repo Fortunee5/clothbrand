@@ -50,7 +50,7 @@ function FieldError({ children }) {
 
 export default function Checkout() {
   const { cart, total: subtotal, clearCart } = useCart()
-  const { delivery } = useStore()
+  const { delivery, products } = useStore()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [step, setStep] = useState(1)
@@ -235,6 +235,13 @@ export default function Checkout() {
     e.preventDefault()
     if (step === 1) {
       if (validateStep1()) setStep(2)
+      return
+    }
+
+    // An item the admin has since marked Out of Stock can't be bought
+    const soldOut = cart.filter((it) => products.find((p) => String(p.id) === String(it.id))?.inStock === false)
+    if (soldOut.length) {
+      toast(`${soldOut.map((i) => i.name).join(', ')} ${soldOut.length > 1 ? 'are' : 'is'} now out of stock. Please remove ${soldOut.length > 1 ? 'them' : 'it'} from your bag.`, { type: 'error', duration: 7000 })
       return
     }
 
@@ -516,7 +523,7 @@ export default function Checkout() {
                     </div>
                     <div className="flex-grow min-w-0">
                       <p className="text-sm font-medium truncate">{item.name}</p>
-                      {item.size && <p className="text-xs text-gray-400">Size {item.size}</p>}
+                      {(item.size || item.color) && <p className="text-xs text-gray-400">{[item.size && `Size ${item.size}`, item.color].filter(Boolean).join(' · ')}</p>}
                     </div>
                     <p className="font-medium text-sm flex-shrink-0">
                       ₦{(parseFloat(item.price) * item.quantity).toLocaleString()}

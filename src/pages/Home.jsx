@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Shield, RefreshCw, Truck, Headphones } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
+import Reviews from '../components/Reviews'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, ScrollTrigger, EASE } from '../lib/gsap'
 import { useStore } from '../lib/store'
 
 
 const trustFeatures = [
-  { icon: Truck, label: 'Free Delivery', desc: 'On orders over ₦500,000' },
+  { icon: Truck, label: 'Free Delivery', desc: 'On orders over ₦100,000' },
   { icon: RefreshCw, label: 'Easy Returns', desc: '14-day hassle-free returns' },
   { icon: Shield, label: 'Secure Payment', desc: 'Protected by Paystack' },
   { icon: Headphones, label: 'Customer Care', desc: 'Mon–Sat, 9am–6pm' },
@@ -191,7 +192,12 @@ export default function Home() {
                   imgClassName="transition-transform duration-700 group-hover:scale-[1.06]"
                   eager={i < 2}
                 />
-                {i === 0 && (
+                {product.inStock === false && (
+                  <div className="absolute inset-0 z-10 bg-white/55 flex items-center justify-center">
+                    <span className="bg-[#0D0F1C] text-white text-[10px] font-bold uppercase tracking-[0.18em] px-3 py-1.5">Out of Stock</span>
+                  </div>
+                )}
+                {i === 0 && product.inStock !== false && (
                   <span className="absolute top-3 left-3 z-10 bg-[#C9A24B] text-white text-[9px] font-bold uppercase tracking-[0.15em] px-2.5 py-1">
                     Bestseller
                   </span>
@@ -251,6 +257,9 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      {/* ── Customer reviews ── */}
+      <Reviews />
 
       {/* ── Editorial banner ── */}
       <section className="reveal-section bg-[#F7F5F0] py-16 sm:py-24">

@@ -13,10 +13,10 @@ export function CartProvider({ children }) {
   }, [cart])
 
   // A cart line is unique per product + size (same shirt in 12 and 16 = two lines).
-  const keyOf = (item) => item.key || `${item.id}__${item.size || ''}`
+  const keyOf = (item) => item.key || `${item.id}__${item.size || ''}__${item.color || ''}`
 
-  const addToCart = (product, size = '', qty = 1) => {
-    const key = `${product.id}__${size}`
+  const addToCart = (product, size = '', qty = 1, color = '') => {
+    const key = `${product.id}__${size}__${color}`
     setCart((prev) => {
       const existing = prev.find((item) => keyOf(item) === key)
       if (existing) {
@@ -25,7 +25,7 @@ export function CartProvider({ children }) {
         )
       }
       const { images, ...rest } = product
-      return [...prev, { ...rest, key, size, quantity: qty, image: images?.[0] }]
+      return [...prev, { ...rest, key, size, color, quantity: qty, image: images?.[0] }]
     })
   }
 
