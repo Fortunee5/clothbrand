@@ -1,48 +1,32 @@
-import { isConfigured, gasPost, gasGet, ADMIN_KEY } from './backendConfig'
+import { isConfigured, supabase } from './backendConfig'
 
 const LOCAL_KEY = 'orders'
+const readLocal = () => { try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]') } catch { return [] } }
+const writeLocal = (orders) => localStorage.setItem(LOCAL_KEY, JSON.stringify(orders))
 
-function readLocal() {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]')
-  } catch {
-    return []
-  }
+// Wipes orders cached in THIS browser only (does not touch Supabase).
+export function clearLocalOrders() { localStorage.removeItem(LOCAL_KEY) }
+
+// Payment screenshots go to Storage (random file name) instead of bloating the database.
+async function uploadProof(dataUri) {
+  const blob = await (await fetch(dataUri)).blob()
+  const path = `${crypto.randomUUID()}.${blob.type.includes('png') ? 'png' : 'jpg'}`
+  const { error } = await supabase.storage.from('payment-proofs').upload(path, blob, { contentType: blob.type })
+  if (error) throw error
+  return supabase.storage.from('payment-proofs').getPublicUrl(path).data.publicUrl
 }
 
-function writeLocal(orders) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(orders))
-}
-
-/**
- * Wipes orders cached in this browser's localStorage only. Does NOT touch
- * the Google Sheet — use apps-script/Code.gs's resetOrders() (run from the
- * Apps Script editor) or the ?action=reset_all URL for that. This exists
- * because the dashboard merges local + cloud orders, so leftover local
- * test orders can keep showing up even after the sheet has been cleared.
- */
-export function clearLocalOrders() {
-  localStorage.removeItem(LOCAL_KEY)
-}
-
-/**
- * Saves an order. Always writes to localStorage first (so the customer's
- * own success page and the admin dashboard — if opened on this same
- * device — work instantly, even offline). Then best-effort syncs to the
- * Google Sheet backend so the order is visible from any device.
- */
+// Saves locally first (customer's success page works instantly), then to Supabase.
 export async function saveOrder(order) {
-  const existing = readLocal()
-  writeLocal([...existing, order])
-
-  if (!isConfigured()) {
-    console.warn('[ordersApi] Backend not configured — order was only saved locally. See README.md.')
-    return { synced: false, reason: 'not_configured' }
-  }
-
+  writeLocal([...readLocal(), order])
+  if (!isConfigured()) return { synced: false, reason: 'not_configured' }
   try {
-    const data = await gasPost({ action: 'order', order })
-    if (!data.success) throw new Error(data.error || 'Unknown error saving order')
+    let data = order
+    if (String(order.paymentProof || '').startsWith('data:')) {
+      try { data = { ...order, paymentProof: await uploadProof(order.paymentProof) } } catch (e) { console.warn('[ordersApi] proof upload failed, keeping inline', e) }
+    }
+    const { error } = await supabase.from('orders').insert({ id: String(order.id), status: order.status || 'Pending', created_at: order.createdAt || new Date().toISOString(), data })
+    if (error) throw error
     return { synced: true }
   } catch (err) {
     console.error('[ordersApi] saveOrder failed:', err)
@@ -50,56 +34,40 @@ export async function saveOrder(order) {
   }
 }
 
-/**
- * Fetches all orders from the cloud sheet, merged with anything saved
- * locally that the sheet doesn't have yet (e.g. saved while offline).
- * Falls back to local-only data if the network/backend is unreachable —
- * the dashboard should never show a blank/broken screen for a network hiccup.
- */
+const byNewest = (a, b) => Number(b.id) - Number(a.id)
+
 export async function fetchOrders() {
   const local = readLocal()
-
-  if (!isConfigured()) {
-    return {
-      orders: [...local].sort((a, b) => Number(b.id) - Number(a.id)),
-      source: 'local',
-      reason: 'not_configured',
-    }
-  }
-
+  if (!isConfigured()) return { orders: [...local].sort(byNewest), source: 'local', reason: 'not_configured' }
   try {
-    const data = await gasGet({ action: 'list_orders', key: ADMIN_KEY })
-    if (!data.success) throw new Error(data.error || 'Failed to fetch orders')
-
-    const remote = data.orders || []
-    const remoteIds = new Set(remote.map((o) => String(o.id)))
-    const localOnly = local.filter((o) => !remoteIds.has(String(o.id)))
-    const merged = [...remote, ...localOnly].sort((a, b) => Number(b.id) - Number(a.id))
-
+    const { data, error } = await supabase.from('orders').select('*').range(0, 4999)
+    if (error) throw error
+    const remote = data.map((r) => ({ ...r.data, id: r.id, status: r.status }))
+    const ids = new Set(remote.map((o) => String(o.id)))
+    const merged = [...remote, ...local.filter((o) => !ids.has(String(o.id)))].sort(byNewest)
     return { orders: merged, source: 'cloud' }
   } catch (err) {
     console.error('[ordersApi] fetchOrders failed:', err)
-    return {
-      orders: [...local].sort((a, b) => Number(b.id) - Number(a.id)),
-      source: 'local',
-      reason: 'error',
-      error: err,
-    }
+    return { orders: [...local].sort(byNewest), source: 'local', reason: 'error', error: err }
   }
 }
 
 export async function updateOrderStatus(id, status) {
-  const local = readLocal().map((o) => (String(o.id) === String(id) ? { ...o, status } : o))
-  writeLocal(local)
-
+  writeLocal(readLocal().map((o) => (String(o.id) === String(id) ? { ...o, status } : o)))
   if (!isConfigured()) return { synced: false, reason: 'not_configured' }
-
   try {
-    const data = await gasPost({ action: 'update_status', id, status })
-    if (!data.success) throw new Error(data.error || 'Unknown error updating status')
+    const { error } = await supabase.from('orders').update({ status }).eq('id', String(id))
+    if (error) throw error
     return { synced: true }
   } catch (err) {
     console.error('[ordersApi] updateOrderStatus failed:', err)
     return { synced: false, reason: 'error', error: err }
   }
+}
+
+// Live: calls `cb` whenever any order is added or changed. Returns an unsubscribe function.
+export function subscribeOrders(cb) {
+  if (!supabase) return () => {}
+  const ch = supabase.channel('orders-live').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => cb()).subscribe()
+  return () => { supabase.removeChannel(ch) }
 }

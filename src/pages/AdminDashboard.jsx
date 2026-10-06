@@ -5,7 +5,8 @@ import {
   Trash2, Edit2, Plus, Package, ShoppingCart, LogOut, Download, X, Link as LinkIcon,
   Upload, Menu, Search, RefreshCw, Cloud, CloudOff, ChevronDown, Truck, Check,
 } from 'lucide-react'
-import { fetchOrders, updateOrderStatus } from '../lib/ordersApi'
+import { fetchOrders, updateOrderStatus, subscribeOrders } from '../lib/ordersApi'
+import { supabase } from '../lib/backendConfig'
 import { useStore, loadFullProduct, getState } from '../lib/store'
 import { NIGERIA, STATES } from '../lib/nigeria'
 import { saveStateFees } from '../lib/deliveryApi'
@@ -103,12 +104,17 @@ export default function AdminDashboard() {
   useEffect(() => {
     const session = localStorage.getItem('admin_session')
     if (session !== 'true') { navigate('/admin/login'); return }
+    // Writes need a real Supabase login — if it has expired, send the admin back to sign in
+    if (supabase) supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) { localStorage.removeItem('admin_session'); navigate('/admin/login') }
+    })
 
     loadProducts()
     loadOrders()
-    // Live: orders re-sync quietly every 15s (products + delivery fees re-sync via the shared store)
-    const t = setInterval(() => { if (document.visibilityState === 'visible') loadOrders(false, true) }, 15000)
-    return () => clearInterval(t)
+    // Live: new orders / status changes arrive instantly (Supabase Realtime); a slow poll is just a safety net
+    const unsub = subscribeOrders(() => loadOrders(false, true))
+    const t = setInterval(() => { if (document.visibilityState === 'visible') loadOrders(false, true) }, 60000)
+    return () => { unsub(); clearInterval(t) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate])
 
@@ -125,6 +131,7 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem('admin_session')
+    if (supabase) supabase.auth.signOut()
     navigate('/')
   }
 

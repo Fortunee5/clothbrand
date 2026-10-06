@@ -237,7 +237,7 @@ export default function ProductDetail() {
             {/* Trust badges */}
             <div className="border-t border-gray-100 pt-5 space-y-3">
               {[
-                { icon: Truck, text: 'Free delivery on orders over ₦30,000' },
+                { icon: Truck, text: 'Free delivery on orders over ₦500,000' },
                 { icon: RefreshCw, text: '14-day returns — no questions asked' },
                 { icon: Shield, text: 'Secure checkout via Paystack' },
               ].map(({ icon: Icon, text }) => (

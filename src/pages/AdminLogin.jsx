@@ -5,6 +5,7 @@ import Spinner from '../components/Spinner'
 import { useToast } from '../context/ToastContext'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, EASE } from '../lib/gsap'
+import { supabase } from '../lib/backendConfig'
 
 export default function AdminLogin() {
   const [username, setUsername] = useState('')
@@ -28,13 +29,16 @@ export default function AdminLogin() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 400))
-    if (username === 'DsuperaDmin' && password === 'TheSuperAdminPass9090') {
+    // Real login through Supabase Auth (the password is no longer stored in the website code)
+    const { error: authError } = supabase
+      ? await supabase.auth.signInWithPassword({ email: username.trim(), password })
+      : { error: new Error('Supabase is not configured') }
+    if (!authError) {
       localStorage.setItem('admin_session', 'true')
       toast('Welcome back.', { type: 'success' })
       navigate('/admin/dashboard')
     } else {
-      setError('Invalid username or password')
+      setError('Invalid email or password')
       if (cardRef.current) {
         gsap.fromTo(cardRef.current, { x: -8 }, { x: 0, duration: 0.4, ease: 'elastic.out(1, 0.4)' })
       }
@@ -69,7 +73,7 @@ export default function AdminLogin() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2">
-                Username
+                Admin email
               </label>
               <input
                 required
@@ -78,7 +82,7 @@ export default function AdminLogin() {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#C9A24B]/30 focus:border-[#C9A24B] transition-all placeholder:text-gray-300"
-                placeholder="Enter your username"
+                placeholder="Enter your admin email"
               />
             </div>
 

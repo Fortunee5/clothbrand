@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>TheStyleYouHub — one-time migration</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:30px auto;padding:0 16px}label{display:block;margin-top:10px;font-size:13px;font-weight:600}input{width:100%;padding:9px;border:1px solid #bbb;border-radius:4px;box-sizing:border-box}button{margin-top:16px;padding:12px 22px;background:#0D0F1C;color:#fff;border:0;border-radius:4px;font-weight:700;cursor:pointer}button:disabled{opacity:.5}pre{background:#111;color:#9fe;padding:14px;border-radius:6px;min-height:200px;white-space:pre-wrap;font-size:12px}small{color:#666}</style></head>
+<body>
+<h2>Copy Google Sheet data → Supabase</h2>
+<p><small>Your Google Sheet is NOT changed or deleted. Items that already exist in Supabase are skipped, so it is safe to run again.</small></p>
+<label>Supabase Project URL<input id="url" placeholder="https://xxxx.supabase.co"></label>
+<label>Supabase anon key<input id="anon"></label>
+<label>Admin email (the one you created in Supabase)<input id="email" type="email"></label>
+<label>Admin password<input id="pass" type="password"></label>
+<label>Old Apps Script /exec URL<input id="gas" value="https://script.google.com/macros/s/AKfycbwtq_Vow_eyylroyQK0Qv5lCVNO1VhRNmN_vvPjcnYoK_ZtrqwIk4isYWrT72-vW3AL/exec"></label>
+<label>Old ADMIN_KEY<input id="key" value="7jXgvts1ztYujfGjKlRHa2p1X37iVEyR"></label>
+<button id="go">Start migration</button>
+<pre id="log">Waiting…</pre>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+const $ = (i) => document.getElementById(i), logEl = $('log')
+const log = (m) => { logEl.textContent += '\n' + m; logEl.scrollTop = logEl.scrollHeight }
+const gas = async (p) => (await fetch($('gas').value + '?' + new URLSearchParams(p))).json()
+const toBlob = async (d) => (await fetch(d)).blob()
+
+$('go').onclick = async () => {
+  $('go').disabled = true; logEl.textContent = 'Starting…'
+  try {
+    const sb = createClient($('url').value.trim(), $('anon').value.trim())
+    const { error: ae } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('pass').value })
+    if (ae) throw new Error('Login failed: ' + ae.message)
+    log('✔ Signed in as admin')
+
+    // 1) Products
+    const boot = await gas({ action: 'bootstrap' })
+    if (!boot.success) throw new Error('Old backend: ' + boot.error)
+    const { data: have } = await sb.from('products').select('id').range(0, 4999)
+    const haveIds = new Set((have || []).map((r) => String(r.id)))
+    let pOk = 0, pSkip = 0
+    for (const m of boot.products) {
+      if (haveIds.has(String(m.id))) { pSkip++; log(`• skip product ${m.name} (already there)`); continue }
+      const full = await gas({ action: 'get_product', id: m.id })
+      const p = full.success ? full.product : m
+      const images = []
+      for (let i = 0; i < (p.images || []).length; i++) {
+        const img = p.images[i]
+        if (String(img).startsWith('data:')) {
+          const blob = await toBlob(img)
+          const path = `${m.id}/${Date.now()}-${i}.${blob.type.includes('png') ? 'png' : 'jpg'}`
+          const { error } = await sb.storage.from('product-images').upload(path, blob, { contentType: blob.type, cacheControl: '31536000' })
+          if (error) throw new Error(`Photo upload failed for ${m.name}: ${error.message}`)
+          images.push(sb.storage.from('product-images').getPublicUrl(path).data.publicUrl)
+        } else images.push(img)
+      }
+      const { error } = await sb.from('products').insert({
+        id: m.id, name: p.name, description: p.description || '', price: Number(p.price) || 0, category: p.category || '',
+        images, sizes: p.sizes || [], colors: p.colors || [], in_stock: p.inStock !== false,
+        updated_at: p.updatedAt ? new Date(p.updatedAt).toISOString() : new Date().toISOString(),
+      })
+      if (error) throw new Error(`Product ${m.name}: ${error.message}`)
+      pOk++; log(`✔ product ${m.name} (${images.length} photos)`)
+    }
+
+    // 2) Delivery prices
+    const rows = []
+    Object.entries(boot.delivery || {}).forEach(([state, lgas]) => Object.entries(lgas).forEach(([lga, price]) => rows.push({ state, lga, price })))
+    if (rows.length) {
+      const { error } = await sb.from('delivery').upsert(rows)
+      if (error) throw new Error('Delivery: ' + error.message)
+    }
+    log(`✔ ${rows.length} delivery prices`)
+
+    // 3) Orders
+    const od = await gas({ action: 'list_orders', key: $('key').value })
+    if (!od.success) throw new Error('Orders: ' + od.error)
+    const { data: haveO } = await sb.from('orders').select('id').range(0, 4999)
+    const haveOIds = new Set((haveO || []).map((r) => String(r.id)))
+    let oOk = 0, oSkip = 0
+    for (const o of od.orders) {
+      if (haveOIds.has(String(o.id))) { oSkip++; continue }
+      if (String(o.paymentProof || '').startsWith('data:')) {
+        try {
+          const blob = await toBlob(o.paymentProof)
+          const path = `${crypto.randomUUID()}.${blob.type.includes('png') ? 'png' : 'jpg'}`
+          const { error } = await sb.storage.from('payment-proofs').upload(path, blob, { contentType: blob.type })
+          if (!error) o.paymentProof = sb.storage.from('payment-proofs').getPublicUrl(path).data.publicUrl
+        } catch (_) { /* keep inline */ }
+      }
+      const { error } = await sb.from('orders').insert({ id: String(o.id), status: o.status || 'Pending', created_at: String(o.createdAt || ''), data: o })
+      if (error) throw new Error(`Order ${o.id}: ${error.message}`)
+      oOk++
+    }
+    log(`✔ ${oOk} orders copied (${oSkip} already there)`)
+
+    // 4) Check nothing was lost
+    const cnt = async (t) => (await sb.from(t).select('*', { count: 'exact', head: true })).count
+    const [cp, cd, co] = await Promise.all([cnt('products'), cnt('delivery'), cnt('orders')])
+    log('\n── VERIFICATION ──')
+    log(`Products : sheet ${boot.products.length}  →  Supabase ${cp}   ${cp >= boot.products.length ? 'OK' : 'MISMATCH!'}`)
+    log(`Delivery : sheet ${rows.length}  →  Supabase ${cd}   ${cd >= rows.length ? 'OK' : 'MISMATCH!'}`)
+    log(`Orders   : sheet ${od.orders.length}  →  Supabase ${co}   ${co >= od.orders.length ? 'OK' : 'MISMATCH!'}`)
+    log('\nDone. If all three say OK, nothing was lost.')
+  } catch (e) { log('\n✖ ' + e.message) }
+  $('go').disabled = false
+}
+</script></body></html>
