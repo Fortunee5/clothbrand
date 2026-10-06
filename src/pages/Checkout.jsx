@@ -48,17 +48,24 @@ function FieldError({ children }) {
   return <p className="mt-1 text-xs font-medium text-red-500">{children}</p>
 }
 
+const SAVED_KEY = 'tsyh_customer'
+const BLANK = { email: '', firstName: '', lastName: '', address: '', state: '', lga: '', phone: '' }
+const readSaved = () => { try { const v = JSON.parse(localStorage.getItem(SAVED_KEY) || 'null'); return v && v.email ? v : null } catch { return null } }
+
 export default function Checkout() {
   const { cart, total: subtotal, clearCart } = useCart()
   const { delivery, products } = useStore()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [step, setStep] = useState(1)
-  const [formData, setFormData] = useState({
-    email: '', firstName: '', lastName: '',
-    address: '', state: '', lga: '', phone: '',
-    paymentMethod: 'card',
-  })
+  const saved = useRef(readSaved()).current           // details remembered from a previous order on this device
+  const [formData, setFormData] = useState({ ...BLANK, ...(saved || {}), paymentMethod: 'card' })
+  const [usingSaved, setUsingSaved] = useState(!!saved)
+  const [remember, setRemember] = useState(true)
+
+  const useDifferentDetails = () => { setFormData((f) => ({ ...BLANK, paymentMethod: f.paymentMethod })); setErrors({}); setUsingSaved(false); setRemember(false) }
+  const useSavedDetails = () => { setFormData((f) => ({ ...f, ...saved })); setErrors({}); setUsingSaved(true); setRemember(true) }
+  const forgetDetails = () => { localStorage.removeItem(SAVED_KEY); setUsingSaved(false); setFormData((f) => ({ ...BLANK, paymentMethod: f.paymentMethod })) }
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(false)
   const [transferConfirmed, setTransferConfirmed] = useState(false)
@@ -142,6 +149,10 @@ export default function Checkout() {
   })
 
   const finalizeOrder = async (order) => {
+    if (remember) {
+      const { email, firstName, lastName, address, state, lga, phone } = order
+      try { localStorage.setItem(SAVED_KEY, JSON.stringify({ email, firstName, lastName, address, state, lga, phone })) } catch { /* storage full/blocked */ }
+    }
     const { synced } = await saveOrder(order)
     clearCart()
     navigate(`/checkout/success?id=${order.id}`)
@@ -299,6 +310,21 @@ export default function Checkout() {
               {/* ── Step 1 ── */}
               {step === 1 && (
                 <div className="space-y-8">
+                  {saved && (
+                    <div className="bg-gray-50 border border-gray-200 rounded p-4 text-sm space-y-2">
+                      {usingSaved ? (
+                        <p>Welcome back, <span className="font-bold">{saved.firstName}</span>! We've filled in your details from your last order.</p>
+                      ) : (
+                        <p>You're entering different details. Your saved details are kept unless you tick "Remember" below.</p>
+                      )}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1">
+                        {usingSaved
+                          ? <button type="button" onClick={useDifferentDetails} className="text-xs font-bold uppercase tracking-widest underline">Use different details / deliver elsewhere</button>
+                          : <button type="button" onClick={useSavedDetails} className="text-xs font-bold uppercase tracking-widest underline">Use my saved details</button>}
+                        <button type="button" onClick={forgetDetails} className="text-xs text-gray-400 underline">Forget saved details</button>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <h2 className="text-base font-bold uppercase tracking-widest">Contact</h2>
                     <div>
@@ -376,6 +402,11 @@ export default function Checkout() {
                       </div>
                     </div>
                   </div>
+
+                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-black" />
+                    Remember these details on this device for next time
+                  </label>
 
                   <button type="submit"
                     className="w-full sm:w-auto bg-black text-white px-8 py-4 rounded font-bold uppercase tracking-widest hover:bg-gray-900 active:scale-[0.98] transition-all text-sm">

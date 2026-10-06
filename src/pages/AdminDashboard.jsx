@@ -39,7 +39,8 @@ export default function AdminDashboard() {
   const [isAddingProduct, setIsAddingProduct] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [proofPreview, setProofPreview] = useState(null) // order id currently shown in the lightbox
+  const [proofPreview, setProofPreview] = useState(null)
+  const [viewOrder, setViewOrder] = useState(null) // order id currently shown in the lightbox
   const [productSearch, setProductSearch] = useState('')
   const [orderSearch, setOrderSearch] = useState('')
   const navigate = useNavigate()
@@ -530,6 +531,7 @@ export default function AdminDashboard() {
                         <th className="p-4">Payment</th>
                         <th className="p-4">Proof</th>
                         <th className="p-4">Status</th>
+                      <th className="p-4"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -540,6 +542,7 @@ export default function AdminDashboard() {
                           <td className="p-4">
                             <div className="font-medium text-sm">{o.firstName} {o.lastName}</div>
                             <div className="text-xs text-gray-400">{o.email}</div>
+                          <div className="text-xs text-gray-500">{o.phone}</div>
                           </td>
                           <td className="p-4 text-sm max-w-[180px] truncate text-gray-500">{o.address}, {o.city}</td>
                           <td className="p-4 font-bold">₦{parseFloat(o.total).toLocaleString()}</td>
@@ -560,6 +563,11 @@ export default function AdminDashboard() {
                           <td className="p-4">
                             <StatusDropdown status={o.status} onChange={(status) => changeOrderStatus(o.id, status)} />
                           </td>
+                        <td className="p-4">
+                            <button onClick={() => setViewOrder(o)} className="text-[10px] font-bold uppercase tracking-widest border border-gray-300 rounded px-3 py-1.5 hover:bg-black hover:text-white transition-colors whitespace-nowrap">
+                              Details ({(o.items || []).length})
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -575,6 +583,7 @@ export default function AdminDashboard() {
                           <p className="text-xs text-gray-400 font-bold">#{o.id}</p>
                           <p className="font-bold">{o.firstName} {o.lastName}</p>
                           <p className="text-xs text-gray-500">{o.email}</p>
+                        <p className="text-xs text-gray-500">{o.phone}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {o.paymentProof && (
@@ -586,6 +595,9 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="text-xs text-gray-500 truncate">{o.address}, {o.city}</div>
+                      <button onClick={() => setViewOrder(o)} className="w-full text-[10px] font-bold uppercase tracking-widest border border-gray-300 rounded px-3 py-2 hover:bg-black hover:text-white transition-colors">
+                        View full details &amp; items ({(o.items || []).length})
+                      </button>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-gray-400">{o.createdAt}</span>
                         <div className="flex items-center gap-2">
@@ -603,6 +615,11 @@ export default function AdminDashboard() {
           </div>
         )}
       </main>
+
+      {viewOrder && createPortal(
+        <OrderDetails order={viewOrder} onClose={() => setViewOrder(null)} onProof={() => setProofPreview(viewOrder)} />,
+        document.body
+      )}
 
       {proofPreview && createPortal(
         <div
@@ -625,6 +642,89 @@ export default function AdminDashboard() {
         </div>,
         document.body
       )}
+    </div>
+  )
+}
+
+// ── Full order details (everything the customer entered + exactly what they bought) ──
+const naira = (n) => `₦${(Number(n) || 0).toLocaleString()}`
+function Row({ label, children }) {
+  return (
+    <div className="flex justify-between gap-4 py-2 border-b border-gray-100 text-sm">
+      <span className="text-gray-400 text-xs uppercase tracking-wider shrink-0">{label}</span>
+      <span className="text-right font-medium break-words min-w-0">{children || '—'}</span>
+    </div>
+  )
+}
+function OrderDetails({ order: o, onClose, onProof }) {
+  const items = o.items || []
+  const subtotal = o.subtotal ?? items.reduce((s, it) => s + (parseFloat(it.price) || 0) * (it.quantity || 1), 0)
+  const hasFee = o.deliveryFee !== undefined && o.deliveryFee !== null && o.deliveryFee !== ''
+  return (
+    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/70 p-3 sm:p-6 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white w-full max-w-2xl rounded-lg my-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-200">
+          <div>
+            <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Order</p>
+            <h3 className="text-lg font-bold">#{o.id}</h3>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="p-2 hover:bg-gray-100 rounded"><X size={20} /></button>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-6">
+          <section>
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-1">Customer</h4>
+            <Row label="Name">{o.firstName} {o.lastName}</Row>
+            <Row label="Email"><a href={`mailto:${o.email}`} className="underline">{o.email}</a></Row>
+            <Row label="Phone">{o.phone && <a href={`tel:${o.phone}`} className="underline">{o.phone}</a>}</Row>
+          </section>
+
+          <section>
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-1">Delivery</h4>
+            <Row label="Address">{o.address}</Row>
+            <Row label="State">{o.state}</Row>
+            <Row label="Local government">{o.lga}</Row>
+            <Row label="Ordered">{o.createdAt}</Row>
+          </section>
+
+          <section>
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-1">Payment</h4>
+            <Row label="Method">{(o.paymentMethod === 'card' ? 'Card (Paystack)' : o.paymentMethod === 'online' ? 'Bank transfer' : o.paymentMethod || '').toString()}</Row>
+            <Row label="Status">{o.status}</Row>
+            {o.paystackRef && <Row label="Paystack ref">{o.paystackRef}</Row>}
+            {o.paymentProof && (
+              <Row label="Proof">
+                <button onClick={onProof}><img src={o.paymentProof} alt="Payment proof" className="h-16 w-16 object-cover rounded border border-gray-200 ml-auto" /></button>
+              </Row>
+            )}
+          </section>
+
+          <section>
+            <h4 className="text-xs font-bold uppercase tracking-widest mb-2">Items paid for ({items.length})</h4>
+            <div className="divide-y divide-gray-100 border border-gray-200 rounded">
+              {items.map((it, i) => (
+                <div key={`${it.key || it.id}-${i}`} className="flex gap-3 p-3">
+                  {it.image ? <img src={it.image} alt={it.name} className="w-16 h-16 object-cover rounded bg-gray-100 shrink-0" /> : <div className="w-16 h-16 bg-gray-100 rounded shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-sm">{it.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {[it.size && `Size: ${it.size}`, it.color && `Colour: ${it.color}`, `Qty: ${it.quantity || 1}`].filter(Boolean).join(' · ')}
+                    </p>
+                    <p className="text-xs text-gray-400">{naira(it.price)} each</p>
+                  </div>
+                  <p className="font-bold text-sm shrink-0">{naira((parseFloat(it.price) || 0) * (it.quantity || 1))}</p>
+                </div>
+              ))}
+              {items.length === 0 && <p className="p-3 text-sm text-gray-400">No item details were saved for this order.</p>}
+            </div>
+            <div className="mt-3 space-y-1 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{naira(subtotal)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Delivery</span><span>{hasFee ? naira(o.deliveryFee) : 'To be confirmed with customer'}</span></div>
+              <div className="flex justify-between font-bold text-base pt-2 border-t border-gray-200"><span>Total paid</span><span>{naira(o.total)}</span></div>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   )
 }
