@@ -7,6 +7,11 @@ import useGsapContext from '../hooks/useGsapContext'
 import { gsap, EASE } from '../lib/gsap'
 import { supabase } from '../lib/backendConfig'
 
+// The admin types this username; behind the scenes it signs in to Supabase with the admin email.
+// (The password is NOT stored here — it lives in Supabase Auth.)
+const ADMIN_USERNAME = 'DsuperaDmin'
+const ADMIN_EMAIL = 'bluicy8@gmail.com'
+
 export default function AdminLogin() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -31,14 +36,14 @@ export default function AdminLogin() {
     setLoading(true)
     // Real login through Supabase Auth (the password is no longer stored in the website code)
     const { error: authError } = supabase
-      ? await supabase.auth.signInWithPassword({ email: username.trim(), password })
+      ? await supabase.auth.signInWithPassword({ email: username.trim() === ADMIN_USERNAME ? ADMIN_EMAIL : username.trim(), password })
       : { error: new Error('Supabase is not configured') }
     if (!authError) {
       localStorage.setItem('admin_session', 'true')
       toast('Welcome back.', { type: 'success' })
       navigate('/admin/dashboard')
     } else {
-      setError('Invalid email or password')
+      setError('Invalid username or password')
       if (cardRef.current) {
         gsap.fromTo(cardRef.current, { x: -8 }, { x: 0, duration: 0.4, ease: 'elastic.out(1, 0.4)' })
       }
@@ -73,7 +78,7 @@ export default function AdminLogin() {
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 mb-2">
-                Admin email
+                Username
               </label>
               <input
                 required
@@ -82,7 +87,7 @@ export default function AdminLogin() {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#C9A24B]/30 focus:border-[#C9A24B] transition-all placeholder:text-gray-300"
-                placeholder="Enter your admin email"
+                placeholder="Enter your username"
               />
             </div>
 
