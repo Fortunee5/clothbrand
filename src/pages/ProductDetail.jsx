@@ -237,9 +237,9 @@ export default function ProductDetail() {
             {/* Trust badges */}
             <div className="border-t border-gray-100 pt-5 space-y-3">
               {[
-                { icon: Truck, text: 'Free delivery on orders over ₦500,000' },
-                { icon: RefreshCw, text: '14-day returns — no questions asked' },
-                { icon: Shield, text: 'Secure checkout via Paystack' },
+                { icon: Truck, text: 'We do not accept clothes that are worn, washed, altered & ale items' },
+                { icon: RefreshCw, text: 'We do not do cash refunds, but we will gladly issue you store credit of the same amount' },
+                { icon: Shield, text: 'Note: You are responsible for return delivery cahrges' },
               ].map(({ icon: Icon, text }) => (
                 <div key={text} className="flex items-center gap-3 text-xs text-gray-500">
                   <Icon size={14} className="text-[#C9A24B] shrink-0" />
