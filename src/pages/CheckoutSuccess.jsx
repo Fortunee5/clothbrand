@@ -51,7 +51,7 @@ export default function CheckoutSuccess() {
             <Package size={16} className="text-[#C9A24B] shrink-0 mt-0.5" />
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] mb-1">Delivery</p>
-              <p className="text-xs text-gray-500 leading-relaxed">Your order will be dispatched within 1–2 business days.</p>
+              <p className="text-xs text-gray-500 leading-relaxed">Orders within Lagos are delivered within 48hours, Delivery outside Lagos takes 3-5 working days. Note:Delivery time may vary depending on the location and the courier</p>
             </div>
           </div>
         </div>
