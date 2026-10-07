@@ -59,7 +59,7 @@ export default function Header() {
       >
         {/* Announcement bar */}
         <div className="bg-[#0D0F1C] text-[#C9A24B] text-[10px] tracking-[0.2em] uppercase font-medium py-2 text-center hidden sm:block">
-          Free delivery on orders over ₦500,000 · Lagos & nationwide delivery
+          Lagos & nationwide delivery. Note: delivery time may vary depending on location and courier service.
         </div>
 
         <div className="container mx-auto px-4 sm:px-6">
