@@ -78,10 +78,10 @@ export default function Footer() {
             </h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to="#" className="transition-colors hover:text-[#C9A24B]">Contact Us</Link>
+                <Link to="/blackfriday" className="transition-colors hover:text-[#C9A24B]">Contact Us</Link>
               </li>
               <li>
-                <Link to="#" className="transition-colors hover:text-[#C9A24B]">Delivery & Returns</Link>
+                <Link to="/blackfriday/admin" className="transition-colors hover:text-[#C9A24B]">Delivery & Returns</Link>
               </li>
             </ul>
           </div>

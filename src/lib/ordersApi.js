@@ -35,20 +35,21 @@ export async function saveOrder(order) {
 }
 
 const byNewest = (a, b) => Number(b.id) - Number(a.id)
+const notBf = (o) => o.source !== 'blackfriday' // Black Friday orders belong to the BF admin
 
 export async function fetchOrders() {
   const local = readLocal()
-  if (!isConfigured()) return { orders: [...local].sort(byNewest), source: 'local', reason: 'not_configured' }
+  if (!isConfigured()) return { orders: local.filter(notBf).sort(byNewest), source: 'local', reason: 'not_configured' }
   try {
     const { data, error } = await supabase.from('orders').select('*').range(0, 4999)
     if (error) throw error
     const remote = data.map((r) => ({ ...r.data, id: r.id, status: r.status }))
     const ids = new Set(remote.map((o) => String(o.id)))
-    const merged = [...remote, ...local.filter((o) => !ids.has(String(o.id)))].sort(byNewest)
+    const merged = [...remote, ...local.filter((o) => !ids.has(String(o.id)))].filter(notBf).sort(byNewest)
     return { orders: merged, source: 'cloud' }
   } catch (err) {
     console.error('[ordersApi] fetchOrders failed:', err)
-    return { orders: [...local].sort(byNewest), source: 'local', reason: 'error', error: err }
+    return { orders: local.filter(notBf).sort(byNewest), source: 'local', reason: 'error', error: err }
   }
 }
 
