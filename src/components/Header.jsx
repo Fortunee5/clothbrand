@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ShoppingBag, Search, User, Menu, X } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useCart } from '../context/CartContext'
@@ -7,6 +7,10 @@ import { gsap, prefersReducedMotion } from '../lib/gsap'
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const navigate = useNavigate()
+  const searchInputRef = useRef(null)
   const { cart } = useCart()
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
   const location = useLocation()
@@ -21,7 +25,21 @@ export default function Header() {
 
   useEffect(() => {
     setIsMenuOpen(false)
+    setSearchOpen(false)
   }, [location.pathname])
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+
+  const submitSearch = (e) => {
+    e.preventDefault()
+    const q = searchText.trim()
+    navigate(q ? `/shop?q=${encodeURIComponent(q)}` : '/shop')
+    setSearchOpen(false)
+    setSearchText('')
+    setIsMenuOpen(false)
+  }
 
   useEffect(() => {
     document.body.style.overflow = isMenuOpen ? 'hidden' : ''
@@ -98,7 +116,13 @@ export default function Header() {
 
             {/* Actions */}
             <div className="flex items-center gap-1 sm:gap-2">
-
+              <button
+                aria-label={searchOpen ? 'Close search' : 'Search'}
+                onClick={() => setSearchOpen((o) => !o)}
+                className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-600 hover:text-black"
+              >
+                {searchOpen ? <X size={18} /> : <Search size={18} />}
+              </button>
               <Link
                 to="/cart"
                 aria-label={`Cart (${cartCount} items)`}
@@ -117,6 +141,24 @@ export default function Header() {
             </div>
           </div>
         </div>
+
+        {/* Search bar */}
+        {searchOpen && (
+          <div className="border-t border-gray-100 bg-white">
+            <form onSubmit={submitSearch} className="container mx-auto px-4 sm:px-6 py-3 relative">
+              <Search size={16} className="absolute left-7 sm:left-9 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Search products..."
+                aria-label="Search products"
+                className="w-full border border-gray-200 rounded-full pl-10 pr-4 py-2.5 text-sm outline-none focus:border-[#0D0F1C] transition-colors"
+              />
+            </form>
+          </div>
+        )}
       </header>
 
       {/* Mobile drawer overlay */}
@@ -156,6 +198,18 @@ export default function Header() {
               {link.label}
             </Link>
           ))}
+
+          <form onSubmit={submitSearch} className="relative pt-4">
+            <Search size={15} className="absolute left-3.5 top-1/2 translate-y-[-30%] text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Search products..."
+              aria-label="Search products"
+              className="w-full border border-gray-200 rounded-full pl-10 pr-4 py-2.5 text-sm outline-none focus:border-[#0D0F1C]"
+            />
+          </form>
 
           <div className="pt-6 border-t border-gray-100 mt-6 space-y-1">
             <Link

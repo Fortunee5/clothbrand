@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
-import { SlidersHorizontal, X } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { SlidersHorizontal, Search, X } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, EASE } from '../lib/gsap'
@@ -10,10 +10,18 @@ import { useStore } from '../lib/store'
 export default function Shop() {
   const { products } = useStore()
   const [activeCategory, setActiveCategory] = useState('All')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = searchParams.get('q') || ''
+  const setQuery = (v) => setSearchParams(v ? { q: v } : {}, { replace: true })
   const gridRef = useRef(null)
 
   const categories = ['All', ...Array.from(new Set(products.map((p) => p.category)))]
-  const filtered = activeCategory === 'All' ? products : products.filter((p) => p.category === activeCategory)
+  const q = query.trim().toLowerCase()
+  const filtered = products.filter((p) => {
+    if (activeCategory !== 'All' && p.category !== activeCategory) return false
+    if (!q) return true
+    return [p.name, p.category, p.description].some((f) => String(f || '').toLowerCase().includes(q))
+  })
 
   // Re-run a light stagger reveal whenever the visible set changes (filter
   // switch or initial load) so the grid never just "pops" into place.
@@ -24,7 +32,7 @@ export default function Shop() {
       { opacity: 0, y: 20 },
       { opacity: 1, y: 0, duration: 0.45, stagger: 0.04, ease: EASE }
     )
-  }, [activeCategory, filtered.length], gridRef)
+  }, [activeCategory, query, filtered.length], gridRef)
 
   return (
     <div>
@@ -40,6 +48,22 @@ export default function Shop() {
       {/* Category filter */}
       <div className="sticky top-[64px] lg:top-[70px] z-30 bg-white border-b border-gray-100">
         <div className="container mx-auto px-4 sm:px-6">
+          <div className="relative pt-3">
+            <Search size={15} className="absolute left-3.5 top-1/2 translate-y-[-30%] text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products..."
+              aria-label="Search products"
+              className="w-full border border-gray-200 rounded-full pl-10 pr-10 py-2 text-sm outline-none focus:border-[#0D0F1C] transition-colors"
+            />
+            {query && (
+              <button onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3.5 top-1/2 translate-y-[-30%] text-gray-400 hover:text-black">
+                <X size={14} />
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-3">
             <SlidersHorizontal size={14} className="text-gray-400 shrink-0 mr-1" />
             {categories.map((cat) => (
@@ -55,9 +79,9 @@ export default function Shop() {
                 {cat}
               </button>
             ))}
-            {activeCategory !== 'All' && (
+            {(activeCategory !== 'All' || query) && (
               <button
-                onClick={() => setActiveCategory('All')}
+                onClick={() => { setActiveCategory('All'); setQuery('') }}
                 className="shrink-0 flex items-center gap-1 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#C9A24B] hover:text-black transition-colors"
               >
                 <X size={12} /> Clear

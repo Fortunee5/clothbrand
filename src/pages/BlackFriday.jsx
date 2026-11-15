@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useBfProducts, startBfProducts } from '../lib/bfApi'
 import { useBfCart } from '../context/BfCartContext'
 import { useToast } from '../context/ToastContext'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
 
 // Black Friday 2026 = Fri 27 Nov. Sale ends at midnight that night.
@@ -171,7 +171,13 @@ export default function BlackFriday() {
   const { products, ready, error } = useBfProducts()
   const time = useCountdown()
   const [sel, setSel] = useState(null)
+  const [query, setQuery] = useState('')
   useEffect(() => { startBfProducts() }, [])
+
+  const q = query.trim().toLowerCase()
+  const shown = q
+    ? products.filter((p) => [p.name, p.category, p.description].some((f) => String(f || '').toLowerCase().includes(q)))
+    : products
 
   return (
     <div className="bg-black text-white min-h-screen">
@@ -216,12 +222,29 @@ export default function BlackFriday() {
           <h2 className="text-2xl font-black uppercase">The Deals</h2>
           <Link to="/blackfriday/cart" className="text-[11px] uppercase tracking-widest text-[#FFD400] underline underline-offset-4">View cart</Link>
         </div>
+        <div className="relative mb-6">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search deals..."
+            aria-label="Search deals"
+            className="w-full bg-[#111] border border-white/15 focus:border-[#FFD400] text-white placeholder-white/40 pl-10 pr-10 py-3 text-sm outline-none transition-colors"
+          />
+          {query && (
+            <button onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
+              <X size={16} />
+            </button>
+          )}
+        </div>
         {!ready && <p className="text-white/50 text-sm">Loading deals…</p>}
         {ready && error && <p className="text-red-400 text-sm">Couldn't load deals right now. Please refresh.</p>}
         {ready && !error && products.length === 0 && <p className="text-white/50 text-sm">Deals drop soon. Check back shortly.</p>}
+        {ready && !error && products.length > 0 && shown.length === 0 && <p className="text-white/50 text-sm">No deals match "{query}".</p>}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {!ready && Array.from({ length: 4 }, (_, i) => <div key={i} className="aspect-[4/6] bg-white/5 animate-pulse" />)}
-          {products.map((p) => <BfCard key={p.id} p={p} onOpen={setSel} />)}
+          {shown.map((p) => <BfCard key={p.id} p={p} onOpen={setSel} />)}
         </div>
       </section>
       {sel && <BfDetail p={products.find((x) => x.id === sel.id) || sel} onClose={() => setSel(null)} />}
