@@ -15,6 +15,8 @@ const listeners = new Set()
 const set = (p) => { state = { ...state, ...p }; listeners.forEach((l) => l()) }
 export const useBfProducts = () => useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l) }, () => state)
 
+export const getBfProducts = () => state.products
+
 export const toBfProduct = (r) => ({
   id: r.id, name: r.name, description: r.description || '', category: r.category || '',
   previousPrice: Number(r.previous_price) || 0, price: Number(r.price) || 0,

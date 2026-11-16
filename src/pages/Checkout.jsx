@@ -8,7 +8,7 @@ import Spinner from '../components/Spinner'
 import LazyImage from '../components/LazyImage'
 import { compressImageFile } from '../lib/imageUtils'
 import { gsap, prefersReducedMotion } from '../lib/gsap'
-import { useStore } from '../lib/store'
+import { useStore, refresh as refreshStore, getState } from '../lib/store'
 import { NIGERIA, STATES } from '../lib/nigeria'
 import { getDeliveryFee, DELIVERY_TBC_MESSAGE } from '../lib/deliveryApi'
 
@@ -153,6 +153,7 @@ export default function Checkout() {
       const { email, firstName, lastName, address, state, lga, phone } = order
       try { localStorage.setItem(SAVED_KEY, JSON.stringify({ email, firstName, lastName, address, state, lga, phone })) } catch { /* storage full/blocked */ }
     }
+    try { sessionStorage.setItem('tsyh_last_order', JSON.stringify(order)) } catch { /* storage blocked */ }
     const { synced } = await saveOrder(order)
     clearCart()
     navigate(`/checkout/success?id=${order.id}`)
@@ -249,7 +250,11 @@ export default function Checkout() {
       return
     }
 
-    // An item the admin has since marked Out of Stock can't be bought
+    // An item the admin has since marked Out of Stock can't be bought (re-check with fresh data)
+    setLoading(true)
+    try { await refreshStore() } catch { /* use what we have */ }
+    const products = getState().products
+    setLoading(false)
     const soldOut = cart.filter((it) => products.find((p) => String(p.id) === String(it.id))?.inStock === false)
     if (soldOut.length) {
       toast(`${soldOut.map((i) => i.name).join(', ')} ${soldOut.length > 1 ? 'are' : 'is'} now out of stock. Please remove ${soldOut.length > 1 ? 'them' : 'it'} from your bag.`, { type: 'error', duration: 7000 })

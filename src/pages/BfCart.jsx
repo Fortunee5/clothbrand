@@ -4,11 +4,16 @@ import { Minus, Plus, Trash2, ArrowRight, ShoppingBag } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
 import useGsapContext from '../hooks/useGsapContext'
 import { gsap, EASE } from '../lib/gsap'
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
+import { useBfProducts, startBfProducts, refreshBfProducts } from '../lib/bfApi'
 
 export default function Cart() {
   const { cart, removeFromCart, updateQuantity, total } = useBfCart()
   const navigate = useNavigate()
+  const { products } = useBfProducts()
+  useEffect(() => { startBfProducts(); refreshBfProducts() }, [])
+  const isSold = (it) => products.find((p) => String(p.id) === String(it.id))?.inStock === false
+  const soldOutCount = cart.filter(isSold).length
   const listRef = useRef(null)
 
   useGsapContext(() => {
@@ -64,6 +69,7 @@ export default function Cart() {
                   <div className="flex justify-between gap-2">
                     <div className="min-w-0">
                       <h3 className="font-bold uppercase tracking-wide text-sm leading-tight line-clamp-2">{item.name}</h3>
+                      {isSold(item) && <p className="text-[11px] font-bold text-red-600 uppercase tracking-wide mt-1">Out of stock — remove to checkout</p>}
                       <p className="text-[10px] text-gray-400 uppercase tracking-[0.12em] mt-1">{item.category}{item.size ? ` · Size ${item.size}` : ''}{item.color ? ` · ${item.color}` : ''}</p>
                     </div>
                     <button
@@ -127,11 +133,13 @@ export default function Cart() {
               </div>
 
               <button
+                disabled={soldOutCount > 0}
                 onClick={() => navigate('/blackfriday/checkout')}
-                className="w-full bg-[#0D0F1C] text-white py-4 font-bold uppercase tracking-[0.14em] text-[11px] flex items-center justify-center gap-3 hover:bg-[#C9A24B] active:scale-[0.98] transition-all duration-300"
+                className="disabled:opacity-40 disabled:pointer-events-none w-full bg-[#0D0F1C] text-white py-4 font-bold uppercase tracking-[0.14em] text-[11px] flex items-center justify-center gap-3 hover:bg-[#C9A24B] active:scale-[0.98] transition-all duration-300"
               >
                 Checkout <ArrowRight size={15} />
               </button>
+              {soldOutCount > 0 && <p className="text-[11px] text-red-600 font-semibold text-center mt-3">Remove the out-of-stock item{soldOutCount > 1 ? 's' : ''} to continue.</p>}
 
               <Link
                 to="/blackfriday"

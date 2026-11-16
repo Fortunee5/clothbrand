@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useBfProducts, startBfProducts } from '../lib/bfApi'
 import { useBfCart } from '../context/BfCartContext'
 import { useToast } from '../context/ToastContext'
-import { X, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import LazyImage from '../components/LazyImage'
 
 // Black Friday 2026 = Fri 27 Nov. Sale ends at midnight that night.
@@ -171,8 +171,13 @@ export default function BlackFriday() {
   const { products, ready, error } = useBfProducts()
   const time = useCountdown()
   const [sel, setSel] = useState(null)
-  const [query, setQuery] = useState('')
+  const [searchParams] = useSearchParams()
+  const query = searchParams.get('q') || ''
   useEffect(() => { startBfProducts() }, [])
+
+  useEffect(() => { // on phones the hero is tall: bring results into view when searching
+    if (query) document.getElementById('deals')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [query])
 
   const q = query.trim().toLowerCase()
   const shown = q
@@ -217,26 +222,10 @@ export default function BlackFriday() {
         </div>
       </div>
 
-      <section id="deals" className="max-w-6xl mx-auto px-4 py-12">
+      <section id="deals" className="scroll-mt-16 max-w-6xl mx-auto px-4 py-12">
         <div className="flex items-end justify-between mb-6">
           <h2 className="text-2xl font-black uppercase">The Deals</h2>
           <Link to="/blackfriday/cart" className="text-[11px] uppercase tracking-widest text-[#FFD400] underline underline-offset-4">View cart</Link>
-        </div>
-        <div className="relative mb-6">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search deals..."
-            aria-label="Search deals"
-            className="w-full bg-[#111] border border-white/15 focus:border-[#FFD400] text-white placeholder-white/40 pl-10 pr-10 py-3 text-sm outline-none transition-colors"
-          />
-          {query && (
-            <button onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
-              <X size={16} />
-            </button>
-          )}
         </div>
         {!ready && <p className="text-white/50 text-sm">Loading deals…</p>}
         {ready && error && <p className="text-red-400 text-sm">Couldn't load deals right now. Please refresh.</p>}

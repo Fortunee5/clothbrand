@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useBfCart } from '../context/BfCartContext'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Copy, CheckCircle2, AlertCircle, CreditCard, Banknote, Upload, X } from 'lucide-react'
-import { saveBfOrder as saveOrder } from '../lib/bfApi'
+import { saveBfOrder as saveOrder, refreshBfProducts, getBfProducts } from '../lib/bfApi'
 import { useToast } from '../context/ToastContext'
 import Spinner from '../components/Spinner'
 import LazyImage from '../components/LazyImage'
@@ -54,7 +54,7 @@ const readSaved = () => { try { const v = JSON.parse(localStorage.getItem(SAVED_
 
 export default function Checkout() {
   const { cart, total: subtotal, clearCart } = useBfCart()
-  const { delivery, products } = useStore()
+  const { delivery } = useStore()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [step, setStep] = useState(1)
@@ -153,6 +153,7 @@ export default function Checkout() {
       const { email, firstName, lastName, address, state, lga, phone } = order
       try { localStorage.setItem(SAVED_KEY, JSON.stringify({ email, firstName, lastName, address, state, lga, phone })) } catch { /* storage full/blocked */ }
     }
+    try { sessionStorage.setItem('bf_last_order', JSON.stringify(order)) } catch { /* storage blocked */ }
     const { synced } = await saveOrder(order)
     clearCart()
     navigate(`/blackfriday/success?id=${order.id}`)
@@ -249,7 +250,11 @@ export default function Checkout() {
       return
     }
 
-    // An item the admin has since marked Out of Stock can't be bought
+    // An item the admin has since marked Out of Stock can't be bought (re-check with fresh data)
+    setLoading(true)
+    try { await refreshBfProducts() } catch { /* use what we have */ }
+    const products = getBfProducts()
+    setLoading(false)
     const soldOut = cart.filter((it) => products.find((p) => String(p.id) === String(it.id))?.inStock === false)
     if (soldOut.length) {
       toast(`${soldOut.map((i) => i.name).join(', ')} ${soldOut.length > 1 ? 'are' : 'is'} now out of stock. Please remove ${soldOut.length > 1 ? 'them' : 'it'} from your bag.`, { type: 'error', duration: 7000 })
